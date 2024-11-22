@@ -92,10 +92,59 @@ def on_click(event):
         line_objects.append(line)
         canvas.draw()  # Update the canvas
 
+# create 2x2 grid for views
+grid_frame = ttk.Frame(root)
+grid_frame.pack(fill="both", expand=True)
+# configure grid to make all rows and cols equally resizable
+for i in range(2):
+    grid_frame.rowconfigure(i, weight=1)
+    grid_frame.columnconfigure(i, weight=1)
+
 # create the axial view ( a matplotlib figure)
+frame = ttk.Frame(grid_frame)
+frame.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
 fig, ax = plt.subplots(figsize=(6, 6))
 initial_slice = get_slice(image, 0)
 img_plot = ax.imshow(initial_slice, cmap="gray")
+canvas = FigureCanvasTkAgg(fig, master=frame)
+canvas.draw()
+canvas.get_tk_widget().pack(fill="both", expand=True)
+
+fig.canvas.mpl_connect('button_press_event', on_click)
+
+# create the axial view ( a matplotlib figure)
+frame = ttk.Frame(grid_frame)
+frame.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
+fig, ax = plt.subplots(figsize=(6, 6))
+initial_slice = get_slice(image, 0)
+img_plot = ax.imshow(initial_slice, cmap="gray")
+canvas = FigureCanvasTkAgg(fig, master=frame)
+canvas.draw()
+canvas.get_tk_widget().pack(fill="both", expand=True)
+
+fig.canvas.mpl_connect('button_press_event', on_click)
+
+# create the axial view ( a matplotlib figure)
+frame = ttk.Frame(grid_frame)
+frame.grid(row=1, column=0, padx=5, pady=5, sticky="nsew")
+fig, ax = plt.subplots(figsize=(6, 6))
+initial_slice = get_slice(image, 0)
+img_plot = ax.imshow(initial_slice, cmap="gray")
+canvas = FigureCanvasTkAgg(fig, master=frame)
+canvas.draw()
+canvas.get_tk_widget().pack(fill="both", expand=True)
+
+fig.canvas.mpl_connect('button_press_event', on_click)
+
+# create the axial view ( a matplotlib figure)
+frame = ttk.Frame(grid_frame)
+frame.grid(row=1, column=1, padx=2, pady=2, sticky="nsew")
+fig, ax = plt.subplots(figsize=(4, 4))
+initial_slice = get_slice(image, 0)
+img_plot = ax.imshow(initial_slice, cmap="gray")
+canvas = FigureCanvasTkAgg(fig, master=frame)
+canvas.draw()
+canvas.get_tk_widget().pack(fill="both", expand=True)
 
 fig.canvas.mpl_connect('button_press_event', on_click)
 
