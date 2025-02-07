@@ -1,0 +1,250 @@
+import tkinter as tk
+from tkinter import ttk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
+
+class MainView(tk.Tk):
+    """
+    The View in our MVC. Responsible for building and displaying the GUI.
+    For all user interactions, we will invoke Controller callbacks.
+    """
+    def __init__(self, model, controller):
+        super().__init__()
+
+        self.model = model
+        self.controller = controller
+
+        # Keep references to callback functions
+        self._on_click_callback = None
+        self._undo_callback = None
+        self._redo_callback = None
+        self._slice_request_callback = None
+
+        self.title("Interactive 3D Medical Image Segmentation")
+        self.state("zoomed")
+
+        # Prepare main window layout
+        self.columnconfigure(0, weight=1, minsize=250)  # Left sidebar
+        self.columnconfigure(1, weight=3)
+        self.columnconfigure(2, weight=3)
+        self.rowconfigure(0, weight=3)
+        self.rowconfigure(1, weight=3)
+
+        # Sidebar + main frames
+        self.sidebar = tk.Frame(self, bg="lightgray", padx=10, pady=10)
+        self.sidebar.grid(row=0, column=0, rowspan=2, sticky="nsew")
+
+        # Prepare internal structures for user selections
+        self.points_listbox = None
+        self.pointer_color_combobox = None
+
+        # Build the UI
+        self._build_sidebar()
+
+        # Behavior for closing
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _build_sidebar(self):
+        """
+        Builds the left sidebar with buttons, color combobox, listbox, etc.
+        """
+        # Buttons
+        btn_import = ttk.Button(self.sidebar, text="Import Image", command=self._import_image)
+        btn_import.pack(fill="x", pady=5)
+
+        btn_segment = ttk.Button(self.sidebar, text="Segment Image")
+        btn_segment.pack(fill="x", pady=5)
+
+        btn_export = ttk.Button(self.sidebar, text="Export Image")
+        btn_export.pack(fill="x", pady=5)
+
+        # Color dropdown
+        pointer_label = tk.Label(self.sidebar, text="Pointer Colour")
+        pointer_label.pack(pady=(10, 2))
+
+        self.pointer_color_combobox = ttk.Combobox(
+            self.sidebar,
+            values=["Red", "Blue", "Green"]
+        )
+        self.pointer_color_combobox.pack(fill="x")
+        self.pointer_color_combobox.set("Red")
+
+        # Selected points listbox
+        points_label = tk.Label(self.sidebar, text="Selected Points")
+        points_label.pack(pady=(10, 2))
+
+        points_frame = tk.Frame(self.sidebar)
+        points_frame.pack(fill="x")
+
+        scrollbar = tk.Scrollbar(points_frame, orient="vertical")
+        self.points_listbox = tk.Listbox(
+            points_frame, 
+            height=5, 
+            yscrollcommand=scrollbar.set
+        )
+        self.points_listbox.pack(side="left", fill="x", expand=True)
+        scrollbar.config(command=self.points_listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+
+        # Undo/Redo
+        btn_undo = ttk.Button(self.sidebar, text="Undo", command=self._on_undo_click)
+        btn_undo.pack(fill="x", pady=2)
+
+        btn_redo = ttk.Button(self.sidebar, text="Redo", command=self._on_redo_click)
+        btn_redo.pack(fill="x", pady=2)
+
+    def _build_image_frames(self):
+        """
+        Builds the frames that display the axial, coronal, sagittal, and
+        (placeholder) mesh views.
+        """
+        self.axial_view = self._create_image_frame("Axial View", axis=0)
+        self.coronal_view = self._create_image_frame("Coronal View", axis=1)
+        self.sagittal_view = self._create_image_frame("Sagittal View", axis=2)
+        self.mesh_view = self._create_image_frame("Segmentation Result (Axial)", axis=0)
+        
+        # Attach these views to the grid
+        self.axial_view.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        self.coronal_view.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
+        self.sagittal_view.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
+        self.mesh_view.grid(row=1, column=2, sticky="nsew", padx=5, pady=5)
+
+        self.update_idletasks()
+        self.update()
+
+    def _create_image_frame(self, text, axis):
+        """
+        Helper to create a labeled frame with a matplotlib FigureCanvas and a slider.
+        """
+        frame = tk.Frame(self, bd=1, relief="solid")
+        label = tk.Label(frame, text=text)
+        label.pack()
+
+        fig, ax = plt.subplots(figsize=(4,4))
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
+
+        # Connect click events
+        fig.canvas.mpl_connect(
+            'button_press_event',
+            lambda event: self._on_click(event, ax, canvas)
+        )
+
+        sizes = self.model.image.GetLargestPossibleRegion().GetSize()
+        dim = 2 if axis == 0 else 1 if axis == 1 else 0
+        max_slice = sizes[dim] - 1
+
+        # Slider to navigate slices
+        slider = ttk.Scale(
+            frame, 
+            from_=0, 
+            to=max_slice, 
+            orient="horizontal",
+            command=lambda val: self._update_slice(ax, canvas, axis, val, text)
+        )
+        slider.pack(side="top", fill="x", expand=True)
+        
+        initial_slice = max_slice // 2
+        slider.set(initial_slice)
+
+        # Initialize the slice display
+        self._update_slice(ax, canvas, axis, initial_slice, text)
+
+        return frame
+
+    def _update_slice(self, ax, canvas, axis, val, text):
+        """
+        Update the displayed slice in the given axis whenever the slider changes.
+        """
+        if self._slice_request_callback is None:
+            return
+        
+        slice_index = int(float(val))
+        slice_array = self._slice_request_callback(axis, slice_index)
+        ax.clear()
+        ax.imshow(slice_array, cmap='gray')
+        ax.set_title(f"{text} - Slice {slice_index}")
+        canvas.draw()
+
+    def _import_image(self):
+        """
+        Opens a file dialog to select a .nii file and loads it.
+        """
+        file_path = tk.filedialog.askopenfilename(
+            title="Select a NIfTI file",
+            filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")]
+        )
+        if file_path:
+            self.controller.load_image(file_path)
+    
+    def show_image(self):
+        self._build_image_frames()
+
+    def set_on_click_callback(self, callback):
+        """Sets the callback invoked on mouse click in the figure."""
+        self._on_click_callback = callback
+
+    def set_undo_callback(self, callback):
+        """Sets the callback invoked when the user clicks Undo."""
+        self._undo_callback = callback
+
+    def set_redo_callback(self, callback):
+        """Sets the callback invoked when the user clicks Redo."""
+        self._redo_callback = callback
+
+    def set_slice_request_callback(self, callback):
+        """Sets the callback to request a slice from the Model via the Controller."""
+        self._slice_request_callback = callback
+
+    def _on_click(self, event, ax, canvas):
+        """
+        Internal method to pass click events to the controller's on_click.
+        """
+        if self._on_click_callback is not None:
+            color = self.pointer_color_combobox.get() if self.pointer_color_combobox else "Red"
+            self._on_click_callback(event, color)
+
+        # Redraw after any changes
+        canvas.draw()
+
+    def _on_undo_click(self):
+        if self._undo_callback:
+            self._undo_callback()
+
+    def _on_redo_click(self):
+        if self._redo_callback:
+            self._redo_callback()
+
+    def add_point_to_listbox(self, x, y):
+        self.points_listbox.insert("end", f"({x},{y})")
+        self.points_listbox.yview_moveto(1.0)
+
+    def remove_last_point_from_listbox(self):
+        if self.points_listbox.size() > 0:
+            self.points_listbox.delete("end")
+
+    def clear_listbox(self):
+        self.points_listbox.delete(0, "end")
+
+    def plot_point(self, x, y, color):
+        """
+        Plot the point on the 'most recently used' Axes (which is the last user-clicked Axes).
+        Since we have multiple Axes, we can track the event.inaxes or store references from the event.
+        """
+        # We can glean the current figure from plt.gcf(), but typically you'd keep references.
+        ax = plt.gca()
+        mpl_color = {'red': 'r', 'green': 'g', 'blue': 'b'}.get(color.lower(), 'r')
+        return ax.plot(x, y, mpl_color + 'o')[0]
+
+    def draw_canvas(self):
+        """
+        Redraw the active matplotlib figure.
+        """
+        plt.gcf().canvas.draw()
+
+    def _on_close(self):
+        """
+        Called when the user closes the window via the title bar or otherwise.
+        """
+        self.quit()
+        self.destroy()
