@@ -1,7 +1,10 @@
+import os
+
 import tkinter as tk
 from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
+
 
 class MainView(tk.Tk):
     """
@@ -19,6 +22,9 @@ class MainView(tk.Tk):
         self._undo_callback = None
         self._redo_callback = None
         self._slice_request_callback = None
+
+        self.last_used_axis = None
+        self.last_used_slice_index = None
 
         self.title("Interactive 3D Medical Image Segmentation")
         self.state("zoomed")
@@ -52,7 +58,7 @@ class MainView(tk.Tk):
         btn_import = ttk.Button(self.sidebar, text="Import Image", command=self._import_image)
         btn_import.pack(fill="x", pady=5)
 
-        btn_segment = ttk.Button(self.sidebar, text="Segment Image")
+        btn_segment = ttk.Button(self.sidebar, text="Segment Image", command=self._segment_image)
         btn_segment.pack(fill="x", pady=5)
 
         btn_export = ttk.Button(self.sidebar, text="Export Image")
@@ -150,6 +156,8 @@ class MainView(tk.Tk):
         # Initialize the slice display
         self._update_slice(ax, canvas, axis, initial_slice, text)
 
+        canvas.slider = slider
+
         return frame
 
     def _update_slice(self, ax, canvas, axis, val, text):
@@ -174,8 +182,40 @@ class MainView(tk.Tk):
             title="Select a NIfTI file",
             filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")]
         )
-        if file_path:
+
+        if not file_path:
+            return
+        
+        if os.path.isfile(file_path) and file_path.endswith(".nii"):
             self.controller.load_image(file_path)
+        elif os.path.isdir(file_path):
+            dicom_files = [f for f in os.listdir(file_path) if f.lower().endswith(".dcm")]
+            if dicom_files:
+                self.controller.load_image(file_path, False)
+            else:
+                print("The selected folder does not contain any DICOM files.")
+        else:
+            print("Invalid selection. Please select a .nii file or a folder containing DICOM files.")
+
+    def _segment_image(self):
+        """
+        image segmentation functionality.
+        """
+        if self.last_used_axis is None or self.last_used_slice_index is None:
+            print("No slice selected for segmentation.")
+            return
+        axis_str = self.last_used_axis
+        if "Axial" in axis_str:
+            axis = 0
+        elif "Coronal" in axis_str:
+            axis = 1
+        elif "Sagittal" in axis_str:
+            axis = 2
+        else:
+            raise ValueError("Invalid axis string.")
+        
+        slice_array = self._slice_request_callback(axis, self.last_used_slice_index) # get slice array from most recent canvas/axes
+        self.controller.segment_image(slice_array)
     
     def show_image(self):
         self._build_image_frames()
@@ -200,6 +240,13 @@ class MainView(tk.Tk):
         """
         Internal method to pass click events to the controller's on_click.
         """
+        if event.inaxes is None:
+            return
+        
+        self.last_used_axis = ax.get_title()
+        print(f"last used canvas {canvas.slider.get()}")
+        self.last_used_slice_index = int(canvas.slider.get())
+
         if self._on_click_callback is not None:
             color = self.pointer_color_combobox.get() if self.pointer_color_combobox else "Red"
             self._on_click_callback(event, color)

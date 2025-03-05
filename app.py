@@ -5,13 +5,18 @@ from model import ImageModel
 from controller import SegmentationController
 from view import MainView
 
+#import modal_handler
+
+#import modal
+
+# app = modal.App("example-hello-world")
+
+# @app.local_entrypoint()
 def main():
-    parser = argparse.ArgumentParser(description="Interactive 3D Medical Image Segmentation")
-    parser.add_argument("filename", help="Path to the 3D medical image file")
-    args = parser.parse_args()
+    #modal_handler.set_app(app)
 
     # Create the Model
-    model = ImageModel(args.filename)
+    model = ImageModel("CHAOS_TEST_CT_3_DICOM_ANON.nii")
 
     # Initialize the view (GUI). 
     # We pass 'None' temporarily for the controller and will set it after instantiating the controller.

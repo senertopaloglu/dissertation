@@ -1,3 +1,5 @@
+from dicom_to_nifti import DicomToNifti
+
 class SegmentationController:
     """
     The Controller in our MVC. Knows about the Model (ImageModel) and the View,
@@ -18,11 +20,14 @@ class SegmentationController:
         self.view.set_undo_callback(self.undo)
         self.view.set_redo_callback(self.redo)
         self.view.set_slice_request_callback(self.handle_slice_request)
+        
 
-    def load_image(self, file_path):
+    def load_image(self, file_path, is_nifti=True):
         """
         Loads the image from the given file path into the model.
         """
+        if not is_nifti:
+            file_path = DicomToNifti.convert(file_path)
         self.model.change_image(file_path)
         self.refresh_selection_state()
         self.view.show_image()
@@ -101,9 +106,12 @@ class SegmentationController:
         self.undo_stack = []
         self.redo_stack = []
 
-    def segment_image(self):
+    def segment_image(self, arr):
+        import modal_handler
         """
         Calls the model to segment the image based on the user's clicks.
         """
-        pass
+        print("segmenting image begins...")
+        modal_handler.segment()
+        print("segmenting image completed.")
         
