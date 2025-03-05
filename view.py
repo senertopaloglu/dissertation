@@ -215,7 +215,12 @@ class MainView(tk.Tk):
             raise ValueError("Invalid axis string.")
         
         slice_array = self._slice_request_callback(axis, self.last_used_slice_index) # get slice array from most recent canvas/axes
-        self.controller.segment_image(slice_array)
+        points = [
+            [int(x), int(y)]
+            for point in self.points_listbox.get(0, 'end')
+            for x, y in [point.strip('()').split(',')]
+        ]
+        self.controller.segment_image(slice_array, points, self.last_used_slice_index)
     
     def show_image(self):
         self._build_image_frames()

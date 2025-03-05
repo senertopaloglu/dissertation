@@ -106,12 +106,12 @@ class SegmentationController:
         self.undo_stack = []
         self.redo_stack = []
 
-    def segment_image(self, arr):
+    def segment_image(self, slices, points, frame_idx):
         import modal_handler
         """
         Calls the model to segment the image based on the user's clicks.
         """
         print("segmenting image begins...")
-        modal_handler.segment()
+        modal_handler.segment(slices, points, frame_idx)
         print("segmenting image completed.")
         

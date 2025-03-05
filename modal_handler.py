@@ -55,7 +55,7 @@ def show_points(coords, labels, ax, marker_size=200):
     ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
 
 @app.function(gpu="L4", image=image, volumes={"/root/temp":vol}, timeout=1000, mounts=[])
-def do_some_magic():
+def do_some_magic(points, frame_idx):
     import subprocess
 
     # output = subprocess.check_output(["nvidia-smi"], text=True)
@@ -117,7 +117,7 @@ def do_some_magic():
 
 
     # `video_dir` a directory of JPEG frames with filenames like `<frame_index>.jpg`
-    video_dir = "./notebooks/videos/brats2020_001"
+    video_dir = "./notebooks/videos/CHAOS_TEST_CT_3_JPG"
 
     # scan all the JPEG frame names in this directory
     frame_names = [
@@ -126,8 +126,7 @@ def do_some_magic():
     ]
     frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
 
-    # take a look the first video frame
-    frame_idx = 0
+    # take a look the last video slice
     plt.figure(figsize=(12, 8))
     plt.title(f"frame {frame_idx}")
     plt.imshow(Image.open(os.path.join(video_dir, frame_names[frame_idx])))
@@ -145,41 +144,15 @@ def do_some_magic():
 
 
 
-    ann_frame_idx = 0  # the frame index we interact with
+    ann_frame_idx = frame_idx  # the frame index we interact with
     ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers)
 
-    # Let's add a positive click at (x, y) = (68, 110) to get started
-    points = np.array([[68, 110]], dtype=np.float32)
-    # for labels, `1` means positive click and `0` means negative click
-    labels = np.array([1], np.int32)
-    _, out_obj_ids, out_mask_logits = predictor.add_new_points(
-        inference_state=inference_state,
-        frame_idx=ann_frame_idx,
-        obj_id=ann_obj_id,
-        points=points,
-        labels=labels,
-    )
-
-    # show the results on the current (interacted) frame
-    plt.figure(figsize=(12, 8))
-    plt.title(f"frame {ann_frame_idx}")
-    plt.imshow(Image.open(os.path.join(video_dir, frame_names[ann_frame_idx])))
-    show_points(points, labels, plt.gca())
-    show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_ids[0])
-
-
-
-
-
-
-    ann_frame_idx = 0  # the frame index we interact with
-    ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers)
-
+    
     # Let's add a 2nd positive click at (x, y) = (50, 120) to refine the mask
     # sending all clicks (and their labels) to `add_new_points`
-    points = np.array([[60,120],[50, 120]], dtype=np.float32)
+    points = np.array([points], dtype=np.float32)
     # for labels, `1` means positive click and `0` means negative click
-    labels = np.array([1, 1], np.int32)
+    labels = np.array([1 for i in range(len(points))], np.int32)
     _, out_obj_ids, out_mask_logits = predictor.add_new_points(
         inference_state=inference_state,
         frame_idx=ann_frame_idx,
@@ -209,17 +182,15 @@ def do_some_magic():
     
     return video_segments
 
-def segment():
+def segment(slices, points, frame_idx):
     """
     segmentation functionality.
     """
     print(app.name)
-    print(app.__repr__)
-    print(app.__str__)
     with modal.enable_output():
         with app.run():
-            video_segments=do_some_magic.remote()
-    video_dir = "./brats2020_001"
+            video_segments=do_some_magic.remote(points, frame_idx)
+    video_dir = "./CHAOS_TEST_CT_3_JPG"
     vis_frame_stride = 15
     frame_names = [
         p for p in os.listdir(video_dir)
