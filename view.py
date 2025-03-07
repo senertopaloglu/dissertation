@@ -4,6 +4,10 @@ import tkinter as tk
 from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import trimesh
+import scipy.ndimage as ndimage
+
 import numpy as np
 
 class MainView(tk.Tk):
@@ -376,6 +380,51 @@ class MainView(tk.Tk):
         Redraw the active matplotlib figure.
         """
         plt.gcf().canvas.draw()
+    
+    def update_mesh_view(self, video_segments):
+        """
+        Update mesh view
+        """
+        print("******** UPDATE MESH VIEW ********")
+        # Step 1: Convert segmented frames into a 3D volume
+        frame_indices = sorted(list(video_segments.keys()))
+        h,w=list(video_segments.values())[0][list(video_segments.values())[0].keys()[0]].shape
+        num_slices = len(frame_indices)
+        volume = np.zeros((num_slices, h, w), dtype=np.uint8)
+
+        for i, frame_idx in enumerate(frame_indices):
+            for obj_id, mask in video_segments[frame_idx].items():
+                volume[i] = np.maximum(volume[i], mask.astype(np.uint8))
+
+        # Step 2: Apply a 3D surface extraction algorithm (Marching Cubes alternative)
+        verts, faces = ndimage.measurements.center_of_mass(volume, labels=volume, index=np.unique(volume)[1:]), []
+        
+        for z in range(volume.shape[0] - 1):
+            for y in range(volume.shape[1] - 1):
+                for x in range(volume.shape[2] - 1):
+                    cube = volume[z:z+2, y:y+2, x:x+2]
+                    if np.any(cube):
+                        faces.append([(x, y, z), (x+1, y, z), (x, y+1, z)])
+                        faces.append([(x+1, y+1, z), (x, y+1, z), (x+1, y, z)])
+
+        faces = np.array(faces)
+
+        # Step 3: Create a mesh object
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+
+        # Step 4: Visualize the 3D mesh using Matplotlib
+        fig = plt.figure(figsize=(10, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        mesh_plot = Poly3DCollection(verts[faces], alpha=0.7)
+        mesh_plot.set_facecolor((0.3, 0.6, 1, 0.6))  # Light blue with transparency
+        ax.add_collection3d(mesh_plot)
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+        ax.set_xlim(0, volume.shape[2])
+        ax.set_ylim(0, volume.shape[1])
+        ax.set_zlim(0, volume.shape[0])
+        plt.show()
 
     def _on_close(self):
         """
