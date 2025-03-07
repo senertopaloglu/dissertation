@@ -144,13 +144,13 @@ def do_some_magic(points, frame_idx):
 
 
 
-    ann_frame_idx = frame_idx  # the frame index we interact with
+    ann_frame_idx = frame_idx  # the frame index we interact with TODO: set = frame_idx (parameter)
     ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers)
 
     
     # Let's add a 2nd positive click at (x, y) = (50, 120) to refine the mask
     # sending all clicks (and their labels) to `add_new_points`
-    points = np.array([points], dtype=np.float32)
+    points = np.array(points, dtype=np.float32)
     # for labels, `1` means positive click and `0` means negative click
     labels = np.array([1 for i in range(len(points))], np.int32)
     _, out_obj_ids, out_mask_logits = predictor.add_new_points(
@@ -174,7 +174,16 @@ def do_some_magic(points, frame_idx):
 
     # run propagation throughout the video and collect the results in a dict
     video_segments = {}  # video_segments contains the per-frame segmentation results
+
+    # prop forwards
     for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+        video_segments[out_frame_idx] = {
+            out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+            for i, out_obj_id in enumerate(out_obj_ids)
+        }
+    
+    # prop backwards
+    for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx-1, reverse=True):
         video_segments[out_frame_idx] = {
             out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
             for i, out_obj_id in enumerate(out_obj_ids)
