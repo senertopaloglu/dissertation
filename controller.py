@@ -112,6 +112,7 @@ class SegmentationController:
         Calls the model to segment the image based on the user's clicks.
         """
         print("segmenting image begins...")
-        modal_handler.segment(slices, points, frame_idx)
+        video_segments=modal_handler.segment(slices, points, frame_idx)
+        self.view.show_segmentation(video_segments)
         print("segmenting image completed.")
         

@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 class MainView(tk.Tk):
     """
@@ -104,11 +104,15 @@ class MainView(tk.Tk):
         Builds the frames that display the axial, coronal, sagittal, and
         (placeholder) mesh views.
         """
+        self.axial_view_mask = None
+        self.coronal_view_mask = None
+        self.sagittal_view_mask = None
+        
         self.axial_view = self._create_image_frame("Axial View", axis=0)
         self.coronal_view = self._create_image_frame("Coronal View", axis=1)
         self.sagittal_view = self._create_image_frame("Sagittal View", axis=2)
         self.mesh_view = self._create_image_frame("Segmentation Result (Axial)", axis=0)
-        
+
         # Attach these views to the grid
         self.axial_view.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
         self.coronal_view.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
@@ -117,6 +121,19 @@ class MainView(tk.Tk):
 
         self.update_idletasks()
         self.update()
+    
+    def show_mask(self, mask, ax, obj_id=None, random_color=False):
+        print("SHOW MASK: START")
+        if random_color:
+            color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+        else:
+            cmap = plt.get_cmap("tab10")
+            cmap_idx = 0 if obj_id is None else obj_id
+            color = np.array([*cmap(cmap_idx)[:3], 0.6])
+        h, w = mask.shape[-2:]
+        mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+        ax.imshow(mask_image)
+        print("SHOW MASK: END")
 
     def _create_image_frame(self, text, axis):
         """
@@ -129,6 +146,8 @@ class MainView(tk.Tk):
         fig, ax = plt.subplots(figsize=(4,4))
         canvas = FigureCanvasTkAgg(fig, master=frame)
         canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
+
+        frame.canvas = canvas
 
         # Connect click events
         fig.canvas.mpl_connect(
@@ -153,6 +172,27 @@ class MainView(tk.Tk):
         initial_slice = max_slice // 2
         slider.set(initial_slice)
 
+        # checkbox to show/hide segmentation mask
+        show_mask_var=tk.BooleanVar()
+        canvas.show_mask_var = show_mask_var
+        # when checkbox is clicked, show_mask_var is auto updated
+        checkbox = tk.Checkbutton(
+            frame,
+            text="Show Segmentation Mask",
+            variable=show_mask_var,
+            command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
+        )
+        checkbox.pack(side="top", fill="x", pady=5)
+
+        if axis==0 and self.axial_view_mask is None:
+            checkbox.config(state="disabled")
+        if axis==1 and self.coronal_view_mask is None:
+            checkbox.config(state="disabled")
+        if axis==2 and self.sagittal_view_mask is None:
+            checkbox.config(state="disabled")
+
+        canvas.checkbox = checkbox
+        
         # Initialize the slice display
         self._update_slice(ax, canvas, axis, initial_slice, text)
 
@@ -172,7 +212,21 @@ class MainView(tk.Tk):
         ax.clear()
         ax.imshow(slice_array, cmap='gray')
         ax.set_title(f"{text} - Slice {slice_index}")
+
+        if canvas.show_mask_var.get():
+            if axis == 0:
+                for out_obj_id, out_mask in self.axial_view_mask[slice_index].items():
+                    self.show_mask(out_mask, ax, obj_id=out_obj_id)
+            if axis==1:
+                for out_obj_id, out_mask in self.coronal_view_mask[slice_index].items():
+                    self.show_mask(out_mask, ax, obj_id=out_obj_id)
+            if axis==2:
+                for out_obj_id, out_mask in self.sagittal_view_mask[slice_index].items():
+                    self.show_mask(out_mask, ax, obj_id=out_obj_id)
+        
         canvas.draw()
+        self.update_idletasks()
+        self.update()
 
     def _import_image(self):
         """
@@ -224,6 +278,34 @@ class MainView(tk.Tk):
     
     def show_image(self):
         self._build_image_frames()
+    
+    def show_segmentation(self, segmentation_mask):
+        """
+        Display the segmentation mask in view of self.last_used_axis.
+        """
+        axis_str = self.last_used_axis
+        if "Axial" in axis_str:
+            axis = self.axial_view
+            self.axial_view_mask=segmentation_mask
+            label = "Axial View"
+            axis_num=0
+        elif "Coronal" in axis_str:
+            axis = self.coronal_view
+            self.coronal_view_mask=segmentation_mask
+            label = "Coronal View"
+            axis_num=1
+        elif "Sagittal" in axis_str:
+            axis = self.sagittal_view
+            self.sagittal_view_mask=segmentation_mask
+            label = "Sagittal View"
+            axis_num=2
+        else:
+            raise ValueError("Invalid axis string.")
+        canvas = axis.canvas
+        canvas.checkbox.config(state="normal")
+
+        self._update_slice(canvas.figure.axes[0], canvas, axis_num, self.last_used_slice_index, label)        
+
 
     def set_on_click_callback(self, callback):
         """Sets the callback invoked on mouse click in the figure."""
