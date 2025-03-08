@@ -215,3 +215,4 @@ def segment(slices, points, frame_idx):
             show_mask(out_mask, plt.gca(), obj_id=out_obj_id)
     plt.show()
     print("finished in handler, returning to controller")
+    return video_segments

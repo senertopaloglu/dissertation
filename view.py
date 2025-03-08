@@ -303,6 +303,7 @@ class MainView(tk.Tk):
             raise ValueError("Invalid axis string.")
         canvas = axis.canvas
         canvas.checkbox.config(state="normal")
+        canvas.show_mask_var.set(True)
 
         self._update_slice(canvas.figure.axes[0], canvas, axis_num, self.last_used_slice_index, label)        
 
