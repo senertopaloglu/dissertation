@@ -402,8 +402,13 @@ class MainView(tk.Tk):
             mask = frame_data[list(frame_data.keys())[0]]
             combined_mesh[z, :, :] = np.squeeze(mask)  # Assign '1' to masked regions
 
+        non_segmented_mesh = np.ones_like(combined_mesh) - combined_mesh
+
         # Use marching cubes to create the mesh from the combined data
         verts, faces, _, _ = measure.marching_cubes(combined_mesh, level=0.5)
+        verts_non_segmented, faces_non_segmented, _, _ = measure.marching_cubes(non_segmented_mesh, level=0.5)
+
+        print("3D MESH COMPUTATION FINISHED.")
 
         # Create a 3D plot
         fig = plt.figure(figsize=(10, 10))
@@ -411,7 +416,8 @@ class MainView(tk.Tk):
 
         # Plot the mesh
         ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], cmap='viridis')
-
+        ax.plot_trisurf(verts_non_segmented[:, 0], verts_non_segmented[:, 1], faces_non_segmented, verts_non_segmented[:, 2], color='grey', alpha=0.3)
+        
         # Customize the plot (optional)
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
