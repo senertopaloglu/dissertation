@@ -70,6 +70,52 @@ class MainView(tk.Tk):
         btn_export = ttk.Button(self.sidebar, text="Export Image")
         btn_export.pack(fill="x", pady=5)
 
+        tabControl = ttk.Notebook(self.sidebar)
+        tab1 = ttk.Frame(tabControl)
+        tab2 = ttk.Frame(tabControl)
+        tab3 = ttk.Frame(tabControl)
+        tabControl.add(tab1, text="Axial")
+        tabControl.add(tab2, text="Coronal")
+        tabControl.add(tab3, text="Sagittal")
+        tabControl.pack(fill="x", pady=5) # TODO: if doesnt work, try pack(expand=1, fill="both")
+
+        ttk.Label(tab1, text="Axial View").pack(pady=5)
+        ttk.Label(tab2, text="Coronal View").pack(pady=5)
+        ttk.Label(tab3, text="Sagittal View").pack(pady=5)
+
+        tabs = [tab1, tab2, tab3]
+        for tab in tabs:
+            pointer_label = tk.Label(tab, text="Pointer Colour")
+            pointer_label.pack(pady=(10, 2))
+
+            tab.pointer_color_combobox = ttk.Combobox(
+                tab,
+                values=["Red", "Blue", "Green"]
+            )
+            tab.pointer_color_combobox.pack(fill="x")
+            tab.pointer_color_combobox.set("Red")
+
+            points_label = tk.Label(tab, text="Selected Points")
+            points_label.pack(pady=(10, 2))
+
+            points_frame = tk.Frame(tab)
+            points_frame.pack(fill="x")
+
+            scrollbar = tk.Scrollbar(points_frame, orient="vertical")
+            tab.points_listbox = tk.Listbox(
+                points_frame,
+                height=5,
+                yscrollcommand=scrollbar.set
+            )
+            tab.points_listbox.pack(side="left", fill="x", expand=True)
+            scrollbar.config(command=tab.points_listbox.yview)
+            scrollbar.pack(side="right", fill="y")
+
+            btn_undo = ttk.Button(tab, text="Undo", command=self._on_undo_click)
+            btn_undo.pack(fill="x", pady=2)
+            btn_redo = ttk.Button(tab, text="Redo", command=self._on_redo_click)
+            btn_redo.pack(fill="x", pady=2)
+
         # Color dropdown
         pointer_label = tk.Label(self.sidebar, text="Pointer Colour")
         pointer_label.pack(pady=(10, 2))
