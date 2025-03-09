@@ -1,11 +1,8 @@
 import SimpleITK as sitk
+import argparse
 
 class DicomToNifti:
-    def __init__(self, dicom_path, nifti_path):
-        self.dicom_path = dicom_path
-        self.nifti_path = nifti_path
-
-    def convert(dicom_folder_path, nifti_file_path=None):
+    def convert(self, dicom_folder_path, nifti_file_path):
         reader = sitk.ImageSeriesReader()
         dicom_names = reader.GetGDCMSeriesFileNames(dicom_folder_path)
         reader.SetFileNames(dicom_names)
@@ -17,3 +14,19 @@ class DicomToNifti:
         sitk.WriteImage(image, nifti_file_path) # TODO: decide whether to compress this file to .nii.gz
 
         return nifti_file_path
+
+def main():
+    parser = argparse.ArgumentParser(description="Convert a DICOM folder to a NIfTI file.")
+    parser.add_argument("dicom_folder_path", type=str, help="Path to the DICOM folder.")
+    parser.add_argument("--nifti_file_path", type=str, help="Path to save the NIfTI file.", default=None)
+    args = parser.parse_args()
+
+    converter = DicomToNifti()
+    nifti_file_path = converter.convert(args.dicom_folder_path, args.nifti_file_path)
+    print(f"NIfTI file saved to: {nifti_file_path}")
+
+if __name__ == "__main__":
+    main()
+
+#converter = DicomToNifti()
+#converter.convert("c:\Users\sbtop\Downloads\CHAOS_Test_Sets\Test_Sets\CT\35\DICOM_anon")
