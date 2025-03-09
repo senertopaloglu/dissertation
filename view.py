@@ -9,6 +9,8 @@ import trimesh
 import scipy.ndimage as ndimage
 
 import numpy as np
+from skimage import measure
+from mpl_toolkits.mplot3d import Axes3D 
 
 class MainView(tk.Tk):
     """
@@ -311,7 +313,6 @@ class MainView(tk.Tk):
 
         self._update_slice(canvas.figure.axes[0], canvas, axis_num, self.last_used_slice_index, label)        
 
-
     def set_on_click_callback(self, callback):
         """Sets the callback invoked on mouse click in the figure."""
         self._on_click_callback = callback
@@ -385,8 +386,44 @@ class MainView(tk.Tk):
         """
         Update mesh view
         """
-        print("******** UPDATE MESH VIEW ********")
+        print("******** START: UPDATE MESH VIEW ********")
         # Step 1: Convert segmented frames into a 3D volume
+        z_dim = len(video_segments) # Number of frames
+        first_frame_object_id = list(video_segments[0].keys())[0] 
+
+        shape = video_segments[0][first_frame_object_id].shape # Shape of the mask
+        x_dim = shape[1]
+        y_dim = shape[2]
+        combined_mesh = np.zeros((z_dim, x_dim, y_dim), dtype=int)
+
+        # Populate the 3D array with the segmentation masks and image data
+        for z, frame_data in video_segments.items():
+            # Assuming only one object ID is present in each frame; adjust if multiple
+            mask = frame_data[list(frame_data.keys())[0]]
+            combined_mesh[z, :, :] = np.squeeze(mask)  # Assign '1' to masked regions
+
+        # Use marching cubes to create the mesh from the combined data
+        verts, faces, _, _ = measure.marching_cubes(combined_mesh, level=0.5)
+
+        # Create a 3D plot
+        fig = plt.figure(figsize=(10, 10))
+        ax = fig.add_subplot(111, projection='3d')
+
+        # Plot the mesh
+        ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], cmap='viridis')
+
+        # Customize the plot (optional)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_title('3D Mesh of Video Segmentation')  
+
+        plt.show()  
+        
+
+        """
+        OLD APPROACH
+
         frame_indices = sorted(list(video_segments.keys()))
         h,w=list(video_segments.values())[0][list(video_segments.values())[0].keys()[0]].shape
         num_slices = len(frame_indices)
@@ -425,6 +462,8 @@ class MainView(tk.Tk):
         ax.set_ylim(0, volume.shape[1])
         ax.set_zlim(0, volume.shape[0])
         plt.show()
+        """
+        print("******** END: UPDATE MESH VIEW ********")
 
     def _on_close(self):
         """

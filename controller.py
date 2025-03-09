@@ -114,6 +114,6 @@ class SegmentationController:
         print("segmenting image begins...")
         video_segments=modal_handler.segment(slices, points, frame_idx)
         self.view.show_segmentation(video_segments)
-        # TODO: self.view.show_mesh_view(...)
+        self.view.update_mesh_view(video_segments)
         print("segmenting image completed.")
         
