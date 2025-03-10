@@ -126,7 +126,7 @@ def do_some_magic(points, frame_idx):
     ]
     frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
 
-    # take a look the last video slice
+    # take a look the src slice the user interacted with
     plt.figure(figsize=(12, 8))
     plt.title(f"frame {frame_idx}")
     plt.imshow(Image.open(os.path.join(video_dir, frame_names[frame_idx])))
