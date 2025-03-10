@@ -16,7 +16,7 @@ def main():
     #modal_handler.set_app(app)
 
     # Create the Model
-    model = ImageModel("CHAOS_TEST_CT_3_DICOM_ANON.nii")
+    model = ImageModel(None)
 
     # Initialize the view (GUI). 
     # We pass 'None' temporarily for the controller and will set it after instantiating the controller.

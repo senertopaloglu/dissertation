@@ -8,7 +8,8 @@ class ImageModel:
     def __init__(self, filename):
         self.filename = filename
         self.image = None
-        self._load_image()
+        if filename:
+            self._load_image()
 
     def _load_image(self):
         """
