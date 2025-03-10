@@ -1,3 +1,4 @@
+import sys
 import shutil
 import os
 import subprocess
@@ -127,8 +128,9 @@ class SegmentationController:
             shutil.rmtree(local_folder)
 
         # Step 1: Convert NIfTI to JPG and create local folder
-        print(f"Running nifti_to_jpg.py with arguments: {self.model.filename}, {local_folder}")
-        subprocess.run([".venv/Scripts/python", "nifti_to_jpg.py", self.model.filename, local_folder, "--axis", axis_str_suffix.lower()], check=True)
+        print(f"Running nifti_to_jpg.py using python executable at {sys.executable}, with arguments: {self.model.filename}, {local_folder}")
+        # sys.executable will auto select the running Python interpreter (supports cross-platform)
+        subprocess.run([sys.executable, "nifti_to_jpg.py", self.model.filename, local_folder, "--axis", axis_str_suffix.lower()], check=True)
 
         # Step 2: Delete folder in modal
         # do not check=True because no graceful handling if folder not exists in modal volume
