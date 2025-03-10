@@ -1,5 +1,7 @@
 import os
 
+from collections import defaultdict
+
 import tkinter as tk
 from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -366,11 +368,14 @@ class MainView(tk.Tk):
             raise ValueError("Invalid axis string.")
         
         slice_array = self._slice_request_callback(axis, self.last_used_slice_index) # get slice array from most recent canvas/axes
-        points = [
-            [int(x), int(y)]
-            for point in self.points_listbox.get(0, 'end')
-            for x, y in [point.strip('()').split(',')]
-        ]
+        
+        points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
+        for idx, point in enumerate(self.points_listbox.get(0, 'end')):
+            x, y = point.strip('()').split(',')
+            color = self.points_listbox.itemcget(idx, "fg")
+            k = 1 if color == "red" else 2 if color == "green" else 3
+            points[k].append((int(x), int(y), 1))
+
         self.controller.segment_image(slice_array, points, self.last_used_slice_index, axis_str_suffix)
     
     def show_image(self):
