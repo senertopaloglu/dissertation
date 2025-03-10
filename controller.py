@@ -1,3 +1,7 @@
+import shutil
+import os
+import subprocess
+
 from dicom_to_nifti import DicomToNifti
 
 class SegmentationController:
@@ -106,13 +110,45 @@ class SegmentationController:
         self.undo_stack = []
         self.redo_stack = []
 
-    def segment_image(self, slices, points, frame_idx):
+    def segment_image(self, slices, points, frame_idx, axis_str_suffix):
         import modal_handler
         """
         Calls the model to segment the image based on the user's clicks.
         """
-        print("segmenting image begins...")
-        video_segments=modal_handler.segment(slices, points, frame_idx)
+        # get filename (without prefix and file format)
+        foldername = f"{self.model.filename.split('.')[0].split('/')[-1]}_{axis_str_suffix}_JPG"
+        local_folder = f"./temp/{foldername}"
+
+
+
+
+        # Step 0: Delete local folder if it exists
+        if os.path.exists(local_folder):
+            shutil.rmtree(local_folder)
+
+        # Step 1: Convert NIfTI to JPG and create local folder
+        print(f"Running nifti_to_jpg.py with arguments: {self.model.filename}, {local_folder}")
+        subprocess.run([".venv/Scripts/python", "nifti_to_jpg.py", self.model.filename, local_folder, "--axis", axis_str_suffix.lower()], check=True)
+
+        # Step 2: Delete folder in modal
+        # do not check=True because no graceful handling if folder not exists in modal volume
+        print(f"Deleting folder in modal: SAM_2_Medical_3D/frames/{foldername}")
+        subprocess.run(["modal", "volume", "rm", "-r", "sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
+
+        # Step 3: Create folder and transfer files to modal
+        print(f"Transferring files to modal: {local_folder} to SAM_2_Medical_3D/frames/{foldername}")
+        subprocess.run(["modal", "volume", "put", "sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
+
+        # Step 4: Delete local JPG folder and contents
+        print(f"Deleting local folder: {local_folder}")
+        shutil.rmtree(local_folder)
+
+
+
+
+
+        print(f"Calling modal_handler.segment with foldername: {foldername}")
+        video_segments=modal_handler.segment(slices, points, frame_idx, foldername)
         self.view.show_segmentation(video_segments)
         self.view.update_mesh_view(video_segments)
         print("segmenting image completed.")

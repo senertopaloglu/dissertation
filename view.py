@@ -207,48 +207,49 @@ class MainView(tk.Tk):
             lambda event: self._on_click(event, ax, canvas)
         )
 
-        sizes = self.model.image.GetLargestPossibleRegion().GetSize()
-        dim = 2 if axis == 0 else 1 if axis == 1 else 0
-        max_slice = sizes[dim] - 1
+        if self.model.image:
+            sizes = self.model.image.GetLargestPossibleRegion().GetSize()
+            dim = 2 if axis == 0 else 1 if axis == 1 else 0
+            max_slice = sizes[dim] - 1
 
-        # Slider to navigate slices
-        slider = ttk.Scale(
-            frame, 
-            from_=0, 
-            to=max_slice, 
-            orient="horizontal",
-            command=lambda val: self._update_slice(ax, canvas, axis, val, text)
-        )
-        slider.pack(side="top", fill="x", expand=True)
-        
-        initial_slice = max_slice // 2
-        slider.set(initial_slice)
+            # Slider to navigate slices
+            slider = ttk.Scale(
+                frame, 
+                from_=0, 
+                to=max_slice, 
+                orient="horizontal",
+                command=lambda val: self._update_slice(ax, canvas, axis, val, text)
+            )
+            slider.pack(side="top", fill="x", expand=True)
+            
+            initial_slice = max_slice // 2
+            slider.set(initial_slice)
 
-        # checkbox to show/hide segmentation mask
-        show_mask_var=tk.BooleanVar()
-        canvas.show_mask_var = show_mask_var
-        # when checkbox is clicked, show_mask_var is auto updated
-        checkbox = tk.Checkbutton(
-            frame,
-            text="Show Segmentation Mask",
-            variable=show_mask_var,
-            command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
-        )
-        checkbox.pack(side="top", fill="x", pady=5)
+            # checkbox to show/hide segmentation mask
+            show_mask_var=tk.BooleanVar()
+            canvas.show_mask_var = show_mask_var
+            # when checkbox is clicked, show_mask_var is auto updated
+            checkbox = tk.Checkbutton(
+                frame,
+                text="Show Segmentation Mask",
+                variable=show_mask_var,
+                command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
+            )
+            checkbox.pack(side="top", fill="x", pady=5)
 
-        if axis==0 and self.axial_view_mask is None:
-            checkbox.config(state="disabled")
-        if axis==1 and self.coronal_view_mask is None:
-            checkbox.config(state="disabled")
-        if axis==2 and self.sagittal_view_mask is None:
-            checkbox.config(state="disabled")
+            if axis==0 and self.axial_view_mask is None:
+                checkbox.config(state="disabled")
+            if axis==1 and self.coronal_view_mask is None:
+                checkbox.config(state="disabled")
+            if axis==2 and self.sagittal_view_mask is None:
+                checkbox.config(state="disabled")
 
-        canvas.checkbox = checkbox
-        
-        # Initialize the slice display
-        self._update_slice(ax, canvas, axis, initial_slice, text)
+            canvas.checkbox = checkbox
+            
+            # Initialize the slice display
+            self._update_slice(ax, canvas, axis, initial_slice, text)
 
-        canvas.slider = slider
+            canvas.slider = slider
 
         return frame
 
@@ -313,10 +314,13 @@ class MainView(tk.Tk):
         axis_str = self.last_used_axis
         if "Axial" in axis_str:
             axis = 0
+            axis_str_suffix = "AXIAL"
         elif "Coronal" in axis_str:
             axis = 1
+            axis_str_suffix = "CORONAL"
         elif "Sagittal" in axis_str:
             axis = 2
+            axis_str_suffix = "SAGITTAL"
         else:
             raise ValueError("Invalid axis string.")
         
@@ -326,7 +330,7 @@ class MainView(tk.Tk):
             for point in self.points_listbox.get(0, 'end')
             for x, y in [point.strip('()').split(',')]
         ]
-        self.controller.segment_image(slice_array, points, self.last_used_slice_index)
+        self.controller.segment_image(slice_array, points, self.last_used_slice_index, axis_str_suffix)
     
     def show_image(self):
         self._build_image_frames()

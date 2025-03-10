@@ -55,7 +55,7 @@ def show_points(coords, labels, ax, marker_size=200):
     ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
 
 @app.function(gpu="L4", image=image, volumes={"/root/temp":vol}, timeout=1000, mounts=[])
-def do_some_magic(points, frame_idx):
+def do_some_magic(points, frame_idx, foldername):
     import subprocess
 
     # output = subprocess.check_output(["nvidia-smi"], text=True)
@@ -114,10 +114,14 @@ def do_some_magic(points, frame_idx):
 
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
 
-
+    print("*********************")
+    print(os.getcwd())
 
     # `video_dir` a directory of JPEG frames with filenames like `<frame_index>.jpg`
-    video_dir = "./notebooks/videos/CHAOS_TEST_CT_3_JPG"
+    video_dir = f"./frames/{foldername}"
+
+    print(os.listdir(video_dir))
+    print("*********************")
 
     # scan all the JPEG frame names in this directory
     frame_names = [
@@ -191,28 +195,28 @@ def do_some_magic(points, frame_idx):
     
     return video_segments
 
-def segment(slices, points, frame_idx):
+def segment(slices, points, frame_idx, foldername):
     """
     segmentation functionality.
     """
     print(app.name)
     with modal.enable_output():
         with app.run():
-            video_segments=do_some_magic.remote(points, frame_idx)
-    video_dir = "./CHAOS_TEST_CT_3_JPG"
-    vis_frame_stride = 15
-    frame_names = [
-        p for p in os.listdir(video_dir)
-        if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
-    ]
-    frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
-    plt.close("all")
-    for out_frame_idx in range(0, len(frame_names), vis_frame_stride):
-        plt.figure(figsize=(6, 4))
-        plt.title(f"frame {out_frame_idx}")
-        plt.imshow(Image.open(os.path.join(video_dir, frame_names[out_frame_idx])))
-        for out_obj_id, out_mask in video_segments[out_frame_idx].items():
-            show_mask(out_mask, plt.gca(), obj_id=out_obj_id)
-    plt.show()
+            video_segments=do_some_magic.remote(points, frame_idx, foldername)
+    # video_dir = f"./{foldername}"
+    # vis_frame_stride = 15
+    # frame_names = [
+    #     p for p in os.listdir(video_dir)
+    #     if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
+    # ]
+    # frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
+    # plt.close("all")
+    # for out_frame_idx in range(0, len(frame_names), vis_frame_stride):
+    #     plt.figure(figsize=(6, 4))
+    #     plt.title(f"frame {out_frame_idx}")
+    #     plt.imshow(Image.open(os.path.join(video_dir, frame_names[out_frame_idx])))
+    #     for out_obj_id, out_mask in video_segments[out_frame_idx].items():
+    #         show_mask(out_mask, plt.gca(), obj_id=out_obj_id)
+    # plt.show()
     print("finished in handler, returning to controller")
     return video_segments
