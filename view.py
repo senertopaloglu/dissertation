@@ -504,35 +504,36 @@ class MainView(tk.Tk):
         print("******** START: UPDATE MESH VIEW ********")
         # Step 1: Convert segmented frames into a 3D volume
         z_dim = len(video_segments) # Number of frames
-        first_frame_object_id = list(video_segments[0].keys())[0] 
+        first_frame_object_ids = list(video_segments[0].keys())
 
-        shape = video_segments[0][first_frame_object_id].shape # Shape of the mask
+        shape = video_segments[0][first_frame_object_ids[0]].shape # Shape of the mask
         x_dim = shape[1]
         y_dim = shape[2]
+        combined_meshes = {obj_id : np.zeros((z_dim, x_dim, y_dim), dtype=int) for obj_id in first_frame_object_ids}
         combined_mesh = np.zeros((z_dim, x_dim, y_dim), dtype=int)
 
         # Populate the 3D array with the segmentation masks and image data
         for z, frame_data in video_segments.items():
-            # Assuming only one object ID is present in each frame; adjust if multiple
-            mask = frame_data[list(frame_data.keys())[0]]
-            combined_mesh[z, :, :] = np.squeeze(mask)  # Assign '1' to masked regions
+            # inner loop necessary to support multiple objects (segmentation masks) in a single frame
+            for obj_id, mask in frame_data.items():
+                combined_meshes[obj_id][z, :, :] = np.squeeze(mask)  # Assign '1' to masked regions
 
-        non_segmented_mesh = np.ones_like(combined_mesh) - combined_mesh
-
-        # Use marching cubes to create the mesh from the combined data
-        verts, faces, _, _ = measure.marching_cubes(combined_mesh, level=0.5)
-        verts_non_segmented, faces_non_segmented, _, _ = measure.marching_cubes(non_segmented_mesh, level=0.5)
-
-        print("3D MESH COMPUTATION FINISHED.")
+        # non_segmented_mesh = np.ones_like(combined_mesh) - combined_mesh
 
         # Create a 3D plot
         fig = self.mesh_view.canvas.figure
         fig.clf()  # Clear current figure
         ax = fig.add_subplot(111, projection='3d')
 
-        # Plot the mesh
-        ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], cmap='viridis')
-        ax.plot_trisurf(verts_non_segmented[:, 0], verts_non_segmented[:, 1], faces_non_segmented, verts_non_segmented[:, 2], color='grey', alpha=0.3)
+        cmap = plt.get_cmap('tab10')
+        for obj_id, combined_mesh in combined_meshes.items():
+            verts, faces, _, _ = measure.marching_cubes(combined_mesh, level=0.5)
+            color = cmap(obj_id % 10)
+            ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], color=color, alpha=0.7)
+
+        print("3D MESH COMPUTATION FINISHED.")
+
+        #ax.plot_trisurf(verts_non_segmented[:, 0], verts_non_segmented[:, 1], faces_non_segmented, verts_non_segmented[:, 2], color='grey', alpha=0.3)
         
         # Customize the plot (optional)
         ax.set_xlabel('X')
