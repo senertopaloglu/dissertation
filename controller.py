@@ -55,32 +55,45 @@ class SegmentationController:
         x, y = int(event.xdata), int(event.ydata)
         color = pointer_color.lower()
 
+        # Use the canvas attribute to determine which tab to update.
+        if hasattr(event.canvas, "axis"):
+            active_index = event.canvas.axis
+            current_tab = self.view.tabs[active_index]
+        else:
+            # Fallback: use the current active tab
+            print("why am i in the fallback?")
+            active_index = self.view.tabControl.index("current")
+            current_tab = self.view.tabs[active_index]
+
         # Add to points list
-        self.points.append((x, y, color))
+        current_tab.points.append((x, y, color))
         # Clear the redo stack if a new point is added
-        self.redo_stack.clear()
+        current_tab.redo_stack.clear()
 
         # Update the View
-        self.view.add_point_to_listbox(x, y)
+        self.view.add_point_to_listbox(x, y, active_index)
         line = self.view.plot_point(x, y, color)
-        self.line_objects.append(line)
+        current_tab.line_objects.append(line)
 
     def undo(self):
         """
         Undo the last point addition.
         """
-        if not self.points:
+        active_index = self.view.tabControl.index("current")
+        current_tab = self.view.tabs[active_index]
+
+        if not current_tab.points:
             return
 
         # Pop the last point from points
-        last_point = self.points.pop()
-        self.undo_stack.append(last_point)
-        self.redo_stack.append(last_point)
+        last_point = current_tab.points.pop()
+        current_tab.undo_stack.append(last_point)
+        current_tab.redo_stack.append(last_point)
 
         # Remove from the View’s listbox and figure
         self.view.remove_last_point_from_listbox()
-        if self.line_objects:
-            last_line = self.line_objects.pop()
+        if current_tab.line_objects:
+            last_line = current_tab.line_objects.pop()
             last_line.remove()
         self.view.draw_canvas()
 
@@ -88,28 +101,33 @@ class SegmentationController:
         """
         Redo the last undone point addition.
         """
-        if not self.redo_stack:
+        active_index = self.view.tabControl.index("current")
+        current_tab = self.view.tabs[active_index]
+
+        if not current_tab.redo_stack:
             return
 
-        restored_point = self.redo_stack.pop()
-        self.points.append(restored_point)
-        self.undo_stack.append(restored_point)
+        restored_point = current_tab.redo_stack.pop()
+        current_tab.points.append(restored_point)
+        current_tab.undo_stack.append(restored_point)
 
         x, y, color = restored_point
         self.view.add_point_to_listbox(x, y)
         line = self.view.plot_point(x, y, color)
-        self.line_objects.append(line)
+        current_tab.line_objects.append(line)
         self.view.draw_canvas()
     
     def refresh_selection_state(self):
+        active_index = self.view.tabControl.index("current")
+        current_tab = self.view.tabs[active_index]
         self.view.clear_listbox()
-        while self.line_objects:
-            last_line = self.line_objects.pop()
+        while current_tab.line_objects:
+            last_line = current_tab.line_objects.pop()
             last_line.remove()
-        self.points = []
-        self.line_objects = []
-        self.undo_stack = []
-        self.redo_stack = []
+        current_tab.points = []
+        current_tab.line_objects = []
+        current_tab.undo_stack = []
+        current_tab.redo_stack = []
 
     def segment_image(self, slices, points, frame_idx, axis_str_suffix):
         import modal_handler

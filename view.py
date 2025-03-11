@@ -48,14 +48,6 @@ class MainView(tk.Tk):
         self.sidebar = tk.Frame(self, bg="lightgray", padx=10, pady=10)
         self.sidebar.grid(row=0, column=0, rowspan=2, sticky="nsew")
 
-        # Prepare internal structures for user selections
-        self.points_listbox = None
-        
-        self.pointer_color_var = None
-        self.pointer_color_optionmenu = None
-
-        self.pointer_color_combobox = None
-
         # Build the UI
         self._build_sidebar()
 
@@ -80,26 +72,53 @@ class MainView(tk.Tk):
         tab1 = ttk.Frame(tabControl)
         tab2 = ttk.Frame(tabControl)
         tab3 = ttk.Frame(tabControl)
+
         tabControl.add(tab1, text="Axial")
         tabControl.add(tab2, text="Coronal")
         tabControl.add(tab3, text="Sagittal")
         tabControl.pack(fill="x", pady=5) # TODO: if doesnt work, try pack(expand=1, fill="both")
 
-        ttk.Label(tab1, text="Axial View").pack(pady=5)
-        ttk.Label(tab2, text="Coronal View").pack(pady=5)
-        ttk.Label(tab3, text="Sagittal View").pack(pady=5)
-
         tabs = [tab1, tab2, tab3]
+
+        self.tabControl = tabControl
+        self.tabs = tabs
+
+        for tab in tabs:
+            tab.pointer_color_var = None
+            tab.pointer_color_optionmenu = None
+            tab.points_listbox = None
+            tab.points = []
+            tab.line_objects = []
+            tab.undo_stack = []
+            tab.redo_stack = []
+
         for tab in tabs:
             pointer_label = tk.Label(tab, text="Pointer Colour")
             pointer_label.pack(pady=(10, 2))
 
-            tab.pointer_color_combobox = ttk.Combobox(
-                tab,
-                values=["Red", "Blue", "Green"]
-            )
-            tab.pointer_color_combobox.pack(fill="x")
-            tab.pointer_color_combobox.set("Red")
+            pointer_color_var = tk.StringVar(value="Red")
+            tab.pointer_color_var = pointer_color_var
+
+            # Define a callback to update the OptionMenu button color.
+            def update_option_menu_color(*args, current_tab=tab):
+                selected = current_tab.pointer_color_var.get().lower()  # Convert to lowercase for consistency.
+                current_tab.pointer_color_optionmenu.config(fg=selected, activeforeground=selected)
+            
+            tab.pointer_color_var.trace_add("write", update_option_menu_color)
+
+            tab.pointer_color_optionmenu = tk.OptionMenu(tab, tab.pointer_color_var, "Red", "Blue", "Green")
+            tab.pointer_color_optionmenu.pack(fill="x")
+
+            # Access the underlying menu and configure each item's text color
+            menu = tab.pointer_color_optionmenu["menu"]
+            menu.entryconfig(0, foreground="red")
+            menu.entryconfig(1, foreground="blue")
+            menu.entryconfig(2, foreground="green")
+
+            # Set the default text color to red at startup
+            update_option_menu_color()
+            
+
 
             points_label = tk.Label(tab, text="Selected Points")
             points_label.pack(pady=(10, 2))
@@ -126,56 +145,12 @@ class MainView(tk.Tk):
         pointer_label = tk.Label(self.sidebar, text="Pointer Colour")
         pointer_label.pack(pady=(10, 2))
 
-        # Replace the ttk.Combobox with a tk.OptionMenu for colored options
-        pointer_color_var = tk.StringVar(value="Red")
-
-        # Define a callback to update the OptionMenu button color.
-        def update_option_menu_color(*args):
-            selected = pointer_color_var.get().lower()  # Convert to lowercase for consistency.
-            self.pointer_color_optionmenu.config(fg=selected, activeforeground=selected)
-        
-        pointer_color_var.trace_add("write", update_option_menu_color)
-
-        self.pointer_color_optionmenu = tk.OptionMenu(self.sidebar, pointer_color_var, "Red", "Blue", "Green")
-        self.pointer_color_optionmenu.pack(fill="x")
-
-        # Access the underlying menu and configure each item's text color
-        menu = self.pointer_color_optionmenu["menu"]
-        menu.entryconfig(0, foreground="red")
-        menu.entryconfig(1, foreground="blue")
-        menu.entryconfig(2, foreground="green")
-
-        # Set the default text color to red at startup
-        update_option_menu_color()
-
-        # Optionally, store the variable for later use:
-        self.pointer_color_var = pointer_color_var
-
-
-
-        self.pointer_color_combobox = ttk.Combobox(
-            self.sidebar,
-            values=["Red", "Blue", "Green"]
-        )
-        self.pointer_color_combobox.pack(fill="x")
-        self.pointer_color_combobox.set("Red")
-
         # Selected points listbox
         points_label = tk.Label(self.sidebar, text="Selected Points")
         points_label.pack(pady=(10, 2))
 
         points_frame = tk.Frame(self.sidebar)
         points_frame.pack(fill="x")
-
-        scrollbar = tk.Scrollbar(points_frame, orient="vertical")
-        self.points_listbox = tk.Listbox(
-            points_frame, 
-            height=5, 
-            yscrollcommand=scrollbar.set
-        )
-        self.points_listbox.pack(side="left", fill="x", expand=True)
-        scrollbar.config(command=self.points_listbox.yview)
-        scrollbar.pack(side="right", fill="y")
 
         # Undo/Redo
         btn_undo = ttk.Button(self.sidebar, text="Undo", command=self._on_undo_click)
@@ -231,9 +206,12 @@ class MainView(tk.Tk):
 
         fig, ax = plt.subplots(figsize=(4,4))
         canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.tab_index = axis
         canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
 
         frame.canvas = canvas
+
+        canvas.axis = axis
 
         # Connect click events
         fig.canvas.mpl_connect(
@@ -369,10 +347,14 @@ class MainView(tk.Tk):
         
         slice_array = self._slice_request_callback(axis, self.last_used_slice_index) # get slice array from most recent canvas/axes
         
+        active_index = self.tabControl.index("current")
+        current_tab = self.tabs[active_index]
+
         points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
-        for idx, point in enumerate(self.points_listbox.get(0, 'end')):
+        
+        for idx, point in enumerate(current_tab.points_listbox.get(0, 'end')):
             x, y = point.strip('()').split(',')
-            color = self.points_listbox.itemcget(idx, "fg")
+            color = current_tab.points_listbox.itemcget(idx, "fg")
             k = 1 if color == "red" else 2 if color == "green" else 3
             points[k].append((int(x), int(y), 1))
 
@@ -446,7 +428,11 @@ class MainView(tk.Tk):
         self.last_used_slice_index = int(canvas.slider.get())
 
         if self._on_click_callback is not None:
-            color = self.pointer_color_var.get() if self.pointer_color_var else "Red"
+            # Use the canvas’ own tab index if available; fallback to current tab.
+            active_index = getattr(canvas, "tab_index", self.tabControl.index("current"))
+            current_tab = self.tabs[active_index]
+            color = current_tab.pointer_color_var.get() if current_tab.pointer_color_var else "Red"
+            
             self._on_click_callback(event, color)
 
         # Redraw after any changes
@@ -460,26 +446,33 @@ class MainView(tk.Tk):
         if self._redo_callback:
             self._redo_callback()
 
-    def add_point_to_listbox(self, x, y):
-        color = self.pointer_color_var.get() if self.pointer_color_var and self.pointer_color_var.get() else "Red"
-        self.points_listbox.insert("end", f"({x},{y})")
-        idx=self.points_listbox.size()-1
+    def add_point_to_listbox(self, x, y, active_index=None):
+        if active_index is None:
+            active_index = self.tabControl.index("current")
+        current_tab = self.tabs[active_index]
+        color = current_tab.pointer_color_var.get() if current_tab.pointer_color_var and current_tab.pointer_color_var.get() else "Red"
+        current_tab.points_listbox.insert("end", f"({x},{y})")
+        idx=current_tab.points_listbox.size()-1
         try:
             """
             Tkinters standard Listbox widget doesnt offer robust per-item styling in all versions.
             If Tk version supports it (typically Tk 8.6 or later), you can use the Listbox's item configuration to set the foreground color for each item.
             """
-            self.points_listbox.itemconfig(idx, {'fg': color.lower()})
+            current_tab.points_listbox.itemconfig(idx, {'fg': color.lower()})
         except Exception as e:
             print(f"Could not set item color: {e}")
-        self.points_listbox.yview_moveto(1.0)
+        current_tab.points_listbox.yview_moveto(1.0)
 
     def remove_last_point_from_listbox(self):
-        if self.points_listbox.size() > 0:
-            self.points_listbox.delete("end")
+        active_index = self.tabControl.index("current")
+        current_tab = self.tabs[active_index]
+        if current_tab.points_listbox.size() > 0:
+            current_tab.points_listbox.delete("end")
 
     def clear_listbox(self):
-        self.points_listbox.delete(0, "end")
+        active_index = self.tabControl.index("current")
+        current_tab = self.tabs[active_index]
+        current_tab.points_listbox.delete(0, "end")
 
     def plot_point(self, x, y, color):
         """
