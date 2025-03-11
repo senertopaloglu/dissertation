@@ -191,6 +191,7 @@ class MainView(tk.Tk):
         """
         Helper to create a labeled frame with a matplotlib FigureCanvas and a slider.
         """
+        print("4. start view._create_image_frame. axis=", axis)
         frame = tk.Frame(self, bd=1, relief="solid")
         label = tk.Label(frame, text=text)
         label.pack()
@@ -208,6 +209,7 @@ class MainView(tk.Tk):
         )
 
         if self.model.image:
+            print("4. a) inside view._create_image_frame, when self.model.image is not None")
             sizes = self.model.image.GetLargestPossibleRegion().GetSize()
             dim = 2 if axis == 0 else 1 if axis == 1 else 0
             max_slice = sizes[dim] - 1
@@ -251,29 +253,37 @@ class MainView(tk.Tk):
 
             canvas.slider = slider
 
+        print("4. b) inside view._create_image_frame, now not in the big if statement")
+
         return frame
 
     def _update_slice(self, ax, canvas, axis, val, text):
         """
         Update the displayed slice in the given axis whenever the slider changes.
         """
+        print("2. a) start view._update_slice")
         if self._slice_request_callback is None:
             return
         
         slice_index = int(float(val))
         slice_array = self._slice_request_callback(axis, slice_index)
+        print("2. b) inside view._update_slice, self._slice_request_callback = ", self._slice_request_callback)
+        print("2. c) inside view._update_slice, slice_array = ", slice_array)
         ax.clear()
         ax.imshow(slice_array, cmap='gray')
         ax.set_title(f"{text} - Slice {slice_index}")
 
         if canvas.show_mask_var.get():
             if axis == 0:
+                print("2. d) inside view._update_slice, axis == 0 (axial)")
                 for out_obj_id, out_mask in self.axial_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
             if axis==1:
+                print("2. d) inside view._update_slice, axis == 1 (coronal)")
                 for out_obj_id, out_mask in self.coronal_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
             if axis==2:
+                print("2. d) inside view._update_slice, axis == 2 (sagittal)")
                 for out_obj_id, out_mask in self.sagittal_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
         
@@ -339,29 +349,38 @@ class MainView(tk.Tk):
         """
         Display the segmentation mask in view of self.last_used_axis.
         """
+        print("1. a) inside view.show_segmentation")
         axis_str = self.last_used_axis
+
         if "Axial" in axis_str:
+            print("1. b. a) inside view.show_segmentation axial")
             axis = self.axial_view
             self.axial_view_mask=segmentation_mask
             label = "Axial View"
             axis_num=0
+            print("1. b. b) inside view.show_segmentation axial")
         elif "Coronal" in axis_str:
+            print("1. c. a) inside view.show_segmentation coronal")
             axis = self.coronal_view
             self.coronal_view_mask=segmentation_mask
             label = "Coronal View"
             axis_num=1
+            print("1. c. b) inside view.show_segmentation coronal")
         elif "Sagittal" in axis_str:
+            print("1. d. a) inside view.show_segmentation sagittal")
             axis = self.sagittal_view
             self.sagittal_view_mask=segmentation_mask
             label = "Sagittal View"
             axis_num=2
+            print("1. d. b) inside view.show_segmentation sagittal")
         else:
             raise ValueError("Invalid axis string.")
         canvas = axis.canvas
         canvas.checkbox.config(state="normal")
         canvas.show_mask_var.set(True)
 
-        self._update_slice(canvas.figure.axes[0], canvas, axis_num, self.last_used_slice_index, label)        
+        self._update_slice(canvas.figure.axes[0], canvas, axis_num, self.last_used_slice_index, label)  
+        print("1. e) inside view.show_segmentation")      
 
     def set_on_click_callback(self, callback):
         """Sets the callback invoked on mouse click in the figure."""
@@ -461,7 +480,8 @@ class MainView(tk.Tk):
         print("3D MESH COMPUTATION FINISHED.")
 
         # Create a 3D plot
-        fig = plt.figure(figsize=(10, 10))
+        fig = self.mesh_view.canvas.figure
+        fig.clf()  # Clear current figure
         ax = fig.add_subplot(111, projection='3d')
 
         # Plot the mesh
@@ -474,7 +494,7 @@ class MainView(tk.Tk):
         ax.set_zlabel('Z')
         ax.set_title('3D Mesh of Video Segmentation')  
 
-        plt.show()  
+        self.mesh_view.canvas.draw()
         
 
         """
