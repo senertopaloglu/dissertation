@@ -166,11 +166,11 @@ def do_some_magic(points, frame_idx, foldername):
     )
 
     # show the results on the current (interacted) frame
-    plt.figure(figsize=(12, 8))
-    plt.title(f"frame {ann_frame_idx}")
-    plt.imshow(Image.open(os.path.join(video_dir, frame_names[ann_frame_idx])))
-    show_points(points, labels, plt.gca())
-    show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_ids[0])
+    # plt.figure(figsize=(12, 8))
+    # plt.title(f"frame {ann_frame_idx}")
+    # plt.imshow(Image.open(os.path.join(video_dir, frame_names[ann_frame_idx])))
+    # show_points(points, labels, plt.gca())
+    # show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_ids[0])
 
 
 
