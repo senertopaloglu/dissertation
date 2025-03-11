@@ -1,5 +1,7 @@
 import os
 
+from collections import defaultdict
+
 import tkinter as tk
 from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -48,6 +50,10 @@ class MainView(tk.Tk):
 
         # Prepare internal structures for user selections
         self.points_listbox = None
+        
+        self.pointer_color_var = None
+        self.pointer_color_optionmenu = None
+
         self.pointer_color_combobox = None
 
         # Build the UI
@@ -73,6 +79,33 @@ class MainView(tk.Tk):
         # Color dropdown
         pointer_label = tk.Label(self.sidebar, text="Pointer Colour")
         pointer_label.pack(pady=(10, 2))
+
+        # Replace the ttk.Combobox with a tk.OptionMenu for colored options
+        pointer_color_var = tk.StringVar(value="Red")
+
+        # Define a callback to update the OptionMenu button color.
+        def update_option_menu_color(*args):
+            selected = pointer_color_var.get().lower()  # Convert to lowercase for consistency.
+            self.pointer_color_optionmenu.config(fg=selected, activeforeground=selected)
+        
+        pointer_color_var.trace_add("write", update_option_menu_color)
+
+        self.pointer_color_optionmenu = tk.OptionMenu(self.sidebar, pointer_color_var, "Red", "Blue", "Green")
+        self.pointer_color_optionmenu.pack(fill="x")
+
+        # Access the underlying menu and configure each item's text color
+        menu = self.pointer_color_optionmenu["menu"]
+        menu.entryconfig(0, foreground="red")
+        menu.entryconfig(1, foreground="blue")
+        menu.entryconfig(2, foreground="green")
+
+        # Set the default text color to red at startup
+        update_option_menu_color()
+
+        # Optionally, store the variable for later use:
+        self.pointer_color_var = pointer_color_var
+
+
 
         self.pointer_color_combobox = ttk.Combobox(
             self.sidebar,
@@ -289,11 +322,14 @@ class MainView(tk.Tk):
             raise ValueError("Invalid axis string.")
         
         slice_array = self._slice_request_callback(axis, self.last_used_slice_index) # get slice array from most recent canvas/axes
-        points = [
-            [int(x), int(y)]
-            for point in self.points_listbox.get(0, 'end')
-            for x, y in [point.strip('()').split(',')]
-        ]
+        
+        points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
+        for idx, point in enumerate(self.points_listbox.get(0, 'end')):
+            x, y = point.strip('()').split(',')
+            color = self.points_listbox.itemcget(idx, "fg")
+            k = 1 if color == "red" else 2 if color == "green" else 3
+            points[k].append((int(x), int(y), 1))
+
         self.controller.segment_image(slice_array, points, self.last_used_slice_index, axis_str_suffix)
     
     def show_image(self):
@@ -364,7 +400,7 @@ class MainView(tk.Tk):
         self.last_used_slice_index = int(canvas.slider.get())
 
         if self._on_click_callback is not None:
-            color = self.pointer_color_combobox.get() if self.pointer_color_combobox else "Red"
+            color = self.pointer_color_var.get() if self.pointer_color_var else "Red"
             self._on_click_callback(event, color)
 
         # Redraw after any changes
@@ -379,7 +415,17 @@ class MainView(tk.Tk):
             self._redo_callback()
 
     def add_point_to_listbox(self, x, y):
+        color = self.pointer_color_var.get() if self.pointer_color_var and self.pointer_color_var.get() else "Red"
         self.points_listbox.insert("end", f"({x},{y})")
+        idx=self.points_listbox.size()-1
+        try:
+            """
+            Tkinters standard Listbox widget doesnt offer robust per-item styling in all versions.
+            If Tk version supports it (typically Tk 8.6 or later), you can use the Listbox's item configuration to set the foreground color for each item.
+            """
+            self.points_listbox.itemconfig(idx, {'fg': color.lower()})
+        except Exception as e:
+            print(f"Could not set item color: {e}")
         self.points_listbox.yview_moveto(1.0)
 
     def remove_last_point_from_listbox(self):
@@ -412,35 +458,36 @@ class MainView(tk.Tk):
         print("******** START: UPDATE MESH VIEW ********")
         # Step 1: Convert segmented frames into a 3D volume
         z_dim = len(video_segments) # Number of frames
-        first_frame_object_id = list(video_segments[0].keys())[0] 
+        first_frame_object_ids = list(video_segments[0].keys())
 
-        shape = video_segments[0][first_frame_object_id].shape # Shape of the mask
+        shape = video_segments[0][first_frame_object_ids[0]].shape # Shape of the mask
         x_dim = shape[1]
         y_dim = shape[2]
+        combined_meshes = {obj_id : np.zeros((z_dim, x_dim, y_dim), dtype=int) for obj_id in first_frame_object_ids}
         combined_mesh = np.zeros((z_dim, x_dim, y_dim), dtype=int)
 
         # Populate the 3D array with the segmentation masks and image data
         for z, frame_data in video_segments.items():
-            # Assuming only one object ID is present in each frame; adjust if multiple
-            mask = frame_data[list(frame_data.keys())[0]]
-            combined_mesh[z, :, :] = np.squeeze(mask)  # Assign '1' to masked regions
+            # inner loop necessary to support multiple objects (segmentation masks) in a single frame
+            for obj_id, mask in frame_data.items():
+                combined_meshes[obj_id][z, :, :] = np.squeeze(mask)  # Assign '1' to masked regions
 
-        non_segmented_mesh = np.ones_like(combined_mesh) - combined_mesh
-
-        # Use marching cubes to create the mesh from the combined data
-        verts, faces, _, _ = measure.marching_cubes(combined_mesh, level=0.5)
-        verts_non_segmented, faces_non_segmented, _, _ = measure.marching_cubes(non_segmented_mesh, level=0.5)
-
-        print("3D MESH COMPUTATION FINISHED.")
+        # non_segmented_mesh = np.ones_like(combined_mesh) - combined_mesh
 
         # Create a 3D plot
         fig = self.mesh_view.canvas.figure
         fig.clf()  # Clear current figure
         ax = fig.add_subplot(111, projection='3d')
 
-        # Plot the mesh
-        ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], cmap='viridis')
-        ax.plot_trisurf(verts_non_segmented[:, 0], verts_non_segmented[:, 1], faces_non_segmented, verts_non_segmented[:, 2], color='grey', alpha=0.3)
+        cmap = plt.get_cmap('tab10')
+        for obj_id, combined_mesh in combined_meshes.items():
+            verts, faces, _, _ = measure.marching_cubes(combined_mesh, level=0.5)
+            color = cmap(obj_id % 10)
+            ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], color=color, alpha=0.7)
+
+        print("3D MESH COMPUTATION FINISHED.")
+
+        #ax.plot_trisurf(verts_non_segmented[:, 0], verts_non_segmented[:, 1], faces_non_segmented, verts_non_segmented[:, 2], color='grey', alpha=0.3)
         
         # Customize the plot (optional)
         ax.set_xlabel('X')
