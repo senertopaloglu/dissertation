@@ -71,7 +71,7 @@ class SegmentationController:
         current_tab.redo_stack.clear()
 
         # Update the View
-        self.view.add_point_to_listbox(x, y, active_index)
+        self.view.add_point_to_listbox(x, y, active_index=active_index)
         line = self.view.plot_point(x, y, color)
         current_tab.line_objects.append(line)
 
@@ -95,7 +95,7 @@ class SegmentationController:
         if current_tab.line_objects:
             last_line = current_tab.line_objects.pop()
             last_line.remove()
-        self.view.draw_canvas()
+        self.view.draw_canvas(active_index)
 
     def redo(self):
         """
@@ -112,10 +112,20 @@ class SegmentationController:
         current_tab.undo_stack.append(restored_point)
 
         x, y, color = restored_point
-        self.view.add_point_to_listbox(x, y)
-        line = self.view.plot_point(x, y, color)
-        current_tab.line_objects.append(line)
-        self.view.draw_canvas()
+        self.view.add_point_to_listbox(x, y, color=color)
+        if active_index == 0:
+            line = self.view.plot_point(x, y, color, self.view.axial_view.canvas_ax)
+            current_tab.line_objects.append(line)
+            self.view.draw_canvas(0)
+        elif active_index == 1:
+            line = self.view.plot_point(x, y, color, self.view.coronal_view.canvas_ax)
+            current_tab.line_objects.append(line)
+            self.view.draw_canvas(1)
+        elif active_index == 2:
+            line = self.view.plot_point(x, y, color, self.view.sagittal_view.canvas_ax)
+            current_tab.line_objects.append(line)
+            self.view.draw_canvas(2)
+        
     
     def refresh_selection_state(self):
         active_index = self.view.tabControl.index("current")

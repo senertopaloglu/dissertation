@@ -213,6 +213,8 @@ class MainView(tk.Tk):
 
         canvas.axis = axis
 
+        frame.canvas_ax=ax
+
         # Connect click events
         fig.canvas.mpl_connect(
             'button_press_event',
@@ -451,11 +453,14 @@ class MainView(tk.Tk):
         if self._redo_callback:
             self._redo_callback()
 
-    def add_point_to_listbox(self, x, y, active_index=None):
+    def add_point_to_listbox(self, x, y, color=None, active_index=None):
         if active_index is None:
             active_index = self.tabControl.index("current")
         current_tab = self.tabs[active_index]
-        color = current_tab.pointer_color_var.get() if current_tab.pointer_color_var and current_tab.pointer_color_var.get() else "Red"
+        
+        if color is None:
+            color = current_tab.pointer_color_var.get() or "Red"
+        
         current_tab.points_listbox.insert("end", f"({x},{y})")
         idx=current_tab.points_listbox.size()-1
         try:
@@ -490,11 +495,22 @@ class MainView(tk.Tk):
         mpl_color = {'red': 'r', 'green': 'g', 'blue': 'b'}.get(color.lower(), 'r')
         return ax.plot(x, y, mpl_color + 'o')[0]
 
-    def draw_canvas(self):
+    def draw_canvas(self, ax_idx=None):
         """
         Redraw the active matplotlib figure.
         """
-        plt.gcf().canvas.draw()
+        if ax_idx is None:
+            plt.gcf().canvas.draw()
+            return
+        if ax_idx == 0:
+            canvas = self.axial_view.canvas
+        elif ax_idx == 1:
+            canvas = self.coronal_view.canvas
+        elif ax_idx == 2:
+            canvas = self.sagittal_view.canvas
+        else:
+            canvas = plt.gcf().canvas  # fallback, though it should not happen
+        canvas.draw()
     
     def update_mesh_view(self, video_segments):
         """
