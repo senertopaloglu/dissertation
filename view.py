@@ -298,6 +298,11 @@ class MainView(tk.Tk):
                 for out_obj_id, out_mask in self.sagittal_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
         
+        current_tab = self.tabs[axis]
+        for point in current_tab.points:
+            x, y, color = point
+            self.plot_point(x, y, color, ax)
+
         canvas.draw()
         self.update_idletasks()
         self.update()
@@ -474,13 +479,14 @@ class MainView(tk.Tk):
         current_tab = self.tabs[active_index]
         current_tab.points_listbox.delete(0, "end")
 
-    def plot_point(self, x, y, color):
+    def plot_point(self, x, y, color, ax=None):
         """
         Plot the point on the 'most recently used' Axes (which is the last user-clicked Axes).
         Since we have multiple Axes, we can track the event.inaxes or store references from the event.
         """
         # We can glean the current figure from plt.gcf(), but typically you'd keep references.
-        ax = plt.gca()
+        if ax is None:
+            ax = plt.gca()
         mpl_color = {'red': 'r', 'green': 'g', 'blue': 'b'}.get(color.lower(), 'r')
         return ax.plot(x, y, mpl_color + 'o')[0]
 
