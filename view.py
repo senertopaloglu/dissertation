@@ -141,6 +141,9 @@ class MainView(tk.Tk):
             btn_redo = ttk.Button(tab, text="Redo", command=self._on_redo_click)
             btn_redo.pack(fill="x", pady=2)
 
+            tab.btn_segment = ttk.Button(tab, text="Segment Image", command=self._segment_image)
+            tab.btn_segment.pack(fill="x", pady=5)
+
         # Color dropdown
         pointer_label = tk.Label(self.sidebar, text="Pointer Colour")
         pointer_label.pack(pady=(10, 2))
@@ -339,24 +342,29 @@ class MainView(tk.Tk):
         if self.last_used_axis is None or self.last_used_slice_index is None:
             print("No slice selected for segmentation.")
             return
-        axis_str = self.last_used_axis
-        if "Axial" in axis_str:
-            axis = 0
-            axis_str_suffix = "AXIAL"
-        elif "Coronal" in axis_str:
-            axis = 1
-            axis_str_suffix = "CORONAL"
-        elif "Sagittal" in axis_str:
-            axis = 2
-            axis_str_suffix = "SAGITTAL"
-        else:
-            raise ValueError("Invalid axis string.")
-        
-        slice_array = self._slice_request_callback(axis, self.last_used_slice_index) # get slice array from most recent canvas/axes
         
         active_index = self.tabControl.index("current")
         current_tab = self.tabs[active_index]
 
+        if active_index == 0:
+            axis = 0
+            axis_str_suffix = "AXIAL"
+            frame_idx = int(self.axial_view.canvas.slider.get())
+            slice_array = self._slice_request_callback(axis, frame_idx)
+        elif active_index == 1:
+            axis = 1
+            axis_str_suffix = "CORONAL"
+            frame_idx = int(self.coronal_view.canvas.slider.get())
+            slice_array = self._slice_request_callback(axis, frame_idx)
+        elif active_index == 2:
+            axis = 2
+            axis_str_suffix = "SAGITTAL"
+            frame_idx = int(self.sagittal_view.canvas.slider.get())
+            slice_array = self._slice_request_callback(axis, frame_idx)
+        else:
+            raise ValueError("Invalid axis string.")
+            return
+        
         points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
         
         for idx, point in enumerate(current_tab.points_listbox.get(0, 'end')):
@@ -365,47 +373,43 @@ class MainView(tk.Tk):
             k = 1 if color == "red" else 2 if color == "green" else 3
             points[k].append((int(x), int(y), 1))
 
-        self.controller.segment_image(slice_array, points, self.last_used_slice_index, axis_str_suffix)
+        self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix)
     
     def show_image(self):
         self._build_image_frames()
     
-    def show_segmentation(self, segmentation_mask):
+    def show_segmentation(self, segmentation_mask, axis_str_suffix):
         """
         Display the segmentation mask in view of self.last_used_axis.
         """
         print("1. a) inside view.show_segmentation")
         axis_str = self.last_used_axis
 
-        if "Axial" in axis_str:
-            print("1. b. a) inside view.show_segmentation axial")
+        if axis_str_suffix == "AXIAL":
             axis = self.axial_view
             self.axial_view_mask=segmentation_mask
             label = "Axial View"
             axis_num=0
-            print("1. b. b) inside view.show_segmentation axial")
-        elif "Coronal" in axis_str:
-            print("1. c. a) inside view.show_segmentation coronal")
+        elif axis_str_suffix == "CORONAL":
             axis = self.coronal_view
             self.coronal_view_mask=segmentation_mask
             label = "Coronal View"
             axis_num=1
-            print("1. c. b) inside view.show_segmentation coronal")
-        elif "Sagittal" in axis_str:
-            print("1. d. a) inside view.show_segmentation sagittal")
+        elif axis_str_suffix == "SAGITTAL":
             axis = self.sagittal_view
             self.sagittal_view_mask=segmentation_mask
             label = "Sagittal View"
             axis_num=2
-            print("1. d. b) inside view.show_segmentation sagittal")
         else:
             raise ValueError("Invalid axis string.")
+            return
         canvas = axis.canvas
         canvas.checkbox.config(state="normal")
         canvas.show_mask_var.set(True)
+        slice_idx = int(canvas.slider.get())
 
-        self._update_slice(canvas.figure.axes[0], canvas, axis_num, self.last_used_slice_index, label)  
-        print("1. e) inside view.show_segmentation")      
+        self._update_slice(canvas.figure.axes[0], canvas, axis_num, slice_idx, label)  
+        print("1. e) finish view.show_segmentation")      
 
     def set_on_click_callback(self, callback):
         """Sets the callback invoked on mouse click in the figure."""

@@ -180,7 +180,7 @@ class SegmentationController:
         print(f"Calling modal_handler.segment with foldername: {foldername}")
         video_segments=modal_handler.segment(slices, points, frame_idx, foldername)
         print("0. inside controller")
-        self.view.show_segmentation(video_segments)
+        self.view.show_segmentation(video_segments, axis_str_suffix)
         self.view.update_mesh_view(video_segments)
         print("segmenting image completed.")
         
