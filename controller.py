@@ -34,8 +34,8 @@ class SegmentationController:
         if not is_nifti:
             file_path = DicomToNifti.convert(file_path)
         self.model.change_image(file_path)
-        self.refresh_selection_state()
         self.view.show_image()
+        self.refresh_selection_state()
 
     def handle_slice_request(self, axis, slice_index):
         """
@@ -95,7 +95,21 @@ class SegmentationController:
         if current_tab.line_objects:
             last_line = current_tab.line_objects.pop()
             last_line.remove()
-        self.view.draw_canvas(active_index)
+
+        if active_index == 0:
+            canvas = self.view.axial_view.canvas
+            label = "Axial View"
+            axis = 0
+        elif active_index == 1:
+            canvas = self.view.coronal_view.canvas
+            label = "Coronal View"
+            axis = 1
+        elif active_index == 2:
+            canvas = self.view.sagittal_view.canvas
+            label = "Sagittal View"
+            axis = 2
+        slice_idx = int(canvas.slider.get())
+        self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
 
     def redo(self):
         """
@@ -113,19 +127,23 @@ class SegmentationController:
 
         x, y, color = restored_point
         self.view.add_point_to_listbox(x, y, color=color)
+
         if active_index == 0:
-            line = self.view.plot_point(x, y, color, self.view.axial_view.canvas_ax)
-            current_tab.line_objects.append(line)
-            self.view.draw_canvas(0)
+            canvas = self.view.axial_view.canvas
+            label = "Axial View"
+            axis = 0
         elif active_index == 1:
-            line = self.view.plot_point(x, y, color, self.view.coronal_view.canvas_ax)
-            current_tab.line_objects.append(line)
-            self.view.draw_canvas(1)
+            canvas = self.view.coronal_view.canvas
+            label = "Coronal View"
+            axis = 1
         elif active_index == 2:
-            line = self.view.plot_point(x, y, color, self.view.sagittal_view.canvas_ax)
-            current_tab.line_objects.append(line)
-            self.view.draw_canvas(2)
+            canvas = self.view.sagittal_view.canvas
+            label = "Sagittal View"
+            axis = 2
         
+        self.view.plot_point(x, y, color, getattr(self.view, f"{label.lower().split()[0]}_view").canvas_ax)
+        slice_idx = int(canvas.slider.get())
+        self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
     
     def refresh_selection_state(self):
         active_index = self.view.tabControl.index("current")

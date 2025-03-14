@@ -204,8 +204,12 @@ class MainView(tk.Tk):
         """
         print("4. start view._create_image_frame. axis=", axis)
         frame = tk.Frame(self, bd=1, relief="solid")
+        
         label = tk.Label(frame, text=text)
         label.pack()
+
+        control_frame = tk.Frame(frame)
+        control_frame.pack(side="top", fill="x", padx=5, pady=5)
 
         fig, ax = plt.subplots(figsize=(4,4))
         canvas = FigureCanvasTkAgg(fig, master=frame)
@@ -213,9 +217,7 @@ class MainView(tk.Tk):
         canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
 
         frame.canvas = canvas
-
         canvas.axis = axis
-
         frame.canvas_ax=ax
 
         # Connect click events
@@ -232,7 +234,7 @@ class MainView(tk.Tk):
 
             # Slider to navigate slices
             slider = ttk.Scale(
-                frame, 
+                control_frame, 
                 from_=0, 
                 to=max_slice, 
                 orient="horizontal",
@@ -247,22 +249,36 @@ class MainView(tk.Tk):
             show_mask_var=tk.BooleanVar()
             canvas.show_mask_var = show_mask_var
             # when checkbox is clicked, show_mask_var is auto updated
-            checkbox = tk.Checkbutton(
-                frame,
+            show_mask_checkbox = tk.Checkbutton(
+                control_frame,
                 text="Show Segmentation Mask",
                 variable=show_mask_var,
                 command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
             )
-            checkbox.pack(side="top", fill="x", pady=5)
+            show_mask_checkbox.pack(side="top", fill="x", pady=5)
 
             if axis==0 and self.axial_view_mask is None:
-                checkbox.config(state="disabled")
+                show_mask_checkbox.config(state="disabled")
             if axis==1 and self.coronal_view_mask is None:
-                checkbox.config(state="disabled")
+                show_mask_checkbox.config(state="disabled")
             if axis==2 and self.sagittal_view_mask is None:
-                checkbox.config(state="disabled")
+                show_mask_checkbox.config(state="disabled")
 
-            canvas.checkbox = checkbox
+            canvas.show_mask_checkbox = show_mask_checkbox
+
+            # check box to show/hide points
+            show_points_var=tk.BooleanVar(value=True) 
+            canvas.show_points_var = show_points_var
+            show_points_checkbox = tk.Checkbutton(
+                control_frame,
+                text="Show Points",
+                variable=show_points_var,
+                command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text)
+            )
+            show_points_checkbox.pack(side="top", fill="x", pady=5)
+            #initially disable the checkbox because there are no points to show yet
+            show_points_checkbox.config(state="disabled")
+            canvas.show_points_checkbox = show_points_checkbox
             
             # Initialize the slice display
             self._update_slice(ax, canvas, axis, initial_slice, text)
@@ -303,10 +319,11 @@ class MainView(tk.Tk):
                 for out_obj_id, out_mask in self.sagittal_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
         
-        current_tab = self.tabs[axis]
-        for point in current_tab.points:
-            x, y, color = point
-            self.plot_point(x, y, color, ax)
+        if canvas.show_points_var.get():
+            current_tab = self.tabs[axis]
+            for point in current_tab.points:
+                x, y, color = point
+                self.plot_point(x, y, color, ax)
 
         canvas.draw()
         self.update_idletasks()
@@ -404,7 +421,7 @@ class MainView(tk.Tk):
             raise ValueError("Invalid axis string.")
             return
         canvas = axis.canvas
-        canvas.checkbox.config(state="normal")
+        canvas.show_mask_checkbox.config(state="normal")
         canvas.show_mask_var.set(True)
         slice_idx = int(canvas.slider.get())
 
@@ -477,16 +494,41 @@ class MainView(tk.Tk):
             print(f"Could not set item color: {e}")
         current_tab.points_listbox.yview_moveto(1.0)
 
+        if active_index==0:
+            self.axial_view.canvas.show_points_checkbox.config(state="normal")
+        if active_index==1:
+            self.coronal_view.canvas.show_points_checkbox.config(state="normal")
+        if active_index==2:
+            self.sagittal_view.canvas.show_points_checkbox.config(state="normal")
+
     def remove_last_point_from_listbox(self):
         active_index = self.tabControl.index("current")
         current_tab = self.tabs[active_index]
         if current_tab.points_listbox.size() > 0:
             current_tab.points_listbox.delete("end")
+        else:
+            if active_index == 0:
+                self.axial_view.canvas.show_points_checkbox.config(state="disabled")
+            elif active_index == 1:
+                self.coronal_view.canvas.show_points_checkbox.config(state="disabled")
+            elif active_index == 2:
+                self.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
     def clear_listbox(self):
         active_index = self.tabControl.index("current")
         current_tab = self.tabs[active_index]
         current_tab.points_listbox.delete(0, "end")
+        
+        canvas = None
+        if active_index == 0:
+            canvas = self.axial_view.canvas
+        elif active_index == 1:
+            canvas = self.coronal_view.canvas
+        elif active_index == 2:
+            canvas = self.sagittal_view.canvas
+        
+        if canvas and hasattr(canvas, 'show_points_checkbox'):
+            canvas.show_points_checkbox.config(state="disabled")
 
     def plot_point(self, x, y, color, ax=None):
         """
