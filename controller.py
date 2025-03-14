@@ -80,6 +80,14 @@ class SegmentationController:
         line = self.view.plot_point(x, y, color)
         current_tab.line_objects.append(line)
 
+        # update the state of the pos_click_checkbox based on points for the current color.
+        points_for_color = [pt for pt in current_tab.points if pt[2].lower() == color]
+        if points_for_color:
+            current_tab.pos_click_checkbox.config(state="normal")
+        else:
+            current_tab.pos_click_var.set(True)
+            current_tab.pos_click_checkbox.config(state="disabled")
+
     def undo(self):
         """
         Undo the last point addition.

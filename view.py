@@ -96,25 +96,6 @@ class MainView(tk.Tk):
             pointer_color_var = tk.StringVar(value="Red")
             tab.pointer_color_var = pointer_color_var
 
-            # Define a callback to update the OptionMenu button color.
-            def update_option_menu_color(*args, current_tab=tab):
-                selected = current_tab.pointer_color_var.get().lower()  # Convert to lowercase for consistency.
-                current_tab.pointer_color_optionmenu.config(fg=selected, activeforeground=selected)
-            
-            tab.pointer_color_var.trace_add("write", update_option_menu_color)
-
-            tab.pointer_color_optionmenu = tk.OptionMenu(tab, tab.pointer_color_var, "Red", "Blue", "Green")
-            tab.pointer_color_optionmenu.pack(fill="x")
-
-            # Access the underlying menu and configure each item's text color
-            menu = tab.pointer_color_optionmenu["menu"]
-            menu.entryconfig(0, foreground="red")
-            menu.entryconfig(1, foreground="blue")
-            menu.entryconfig(2, foreground="green")
-
-            # Set the default text color to red at startup
-            update_option_menu_color()
-            
             pos_click_var = tk.BooleanVar(value=True)
             tab.pos_click_var = pos_click_var
             pos_click_checkbox = tk.Checkbutton(
@@ -127,6 +108,38 @@ class MainView(tk.Tk):
 
             pos_click_checkbox.pack(pady=(5,2))
             tab.pos_click_checkbox = pos_click_checkbox
+
+            tab.pointer_color_optionmenu = tk.OptionMenu(tab, tab.pointer_color_var, "Red", "Blue", "Green")
+            tab.pointer_color_optionmenu.pack(fill="x")
+
+            # Access the underlying menu and configure each item's text color
+            menu = tab.pointer_color_optionmenu["menu"]
+            menu.entryconfig(0, foreground="red")
+            menu.entryconfig(1, foreground="blue")
+            menu.entryconfig(2, foreground="green")
+
+            # Define a callback to update the OptionMenu button color.
+            def update_option_menu_color(*args, current_tab=tab):
+                selected = current_tab.pointer_color_var.get().lower()  # Convert to lowercase for consistency.
+                current_tab.pointer_color_optionmenu.config(fg=selected, activeforeground=selected)
+                # Check if there is any point in current_tab.points with the same color.
+                points_for_color = [pt for pt in current_tab.points if pt[2].lower() == selected]
+                if points_for_color:
+                    # There is at least one point with the current color; allow toggling.
+                    current_tab.pos_click_checkbox.config(state="normal")
+                else:
+                    # No point with the current color yet, so force positive and disable toggling.
+                    current_tab.pos_click_var.set(True)
+                    current_tab.pos_click_checkbox.config(state="disabled")
+            
+            tab.pointer_color_var.trace_add("write", update_option_menu_color)
+
+            
+
+            # Set the default text color to red at startup
+            update_option_menu_color()
+            
+            
 
             points_label = tk.Label(tab, text="Selected Points")
             points_label.pack(pady=(10, 2))
