@@ -62,17 +62,21 @@ class SegmentationController:
             current_tab = self.view.tabs[active_index]
         else:
             # Fallback: use the current active tab
-            print("why am i in the fallback?")
             active_index = self.view.tabControl.index("current")
             current_tab = self.view.tabs[active_index]
 
+        pos_flag = 1 if current_tab.pos_click_var.get() else 0
+
+        if current_tab.pos_click_checkbox["state"] == "disabled":
+            current_tab.pos_click_checkbox["state"] = "normal"
+        
         # Add to points list
-        current_tab.points.append((x, y, color))
+        current_tab.points.append((x, y, color, pos_flag))
         # Clear the redo stack if a new point is added
         current_tab.redo_stack.clear()
 
         # Update the View
-        self.view.add_point_to_listbox(x, y, active_index=active_index)
+        self.view.add_point_to_listbox(x, y, pos_flag, active_index=active_index)
         line = self.view.plot_point(x, y, color)
         current_tab.line_objects.append(line)
 
@@ -126,8 +130,8 @@ class SegmentationController:
         current_tab.points.append(restored_point)
         current_tab.undo_stack.append(restored_point)
 
-        x, y, color = restored_point
-        self.view.add_point_to_listbox(x, y, color=color)
+        x, y, color, pos_flag = restored_point
+        self.view.add_point_to_listbox(x, y, pos_flag, color=color)
 
         if active_index == 0:
             canvas = self.view.axial_view.canvas
@@ -163,6 +167,8 @@ class SegmentationController:
             tab.points = []
             tab.undo_stack = []
             tab.redo_stack = []
+            if hasattr(tab, "pos_click_checkbox"):
+                tab.pos_click_checkbox.config(state = "disabled")
 
         # disable the show-points checkbox in each view if no points remain
         if hasattr(self.view, "axial_view") and hasattr(self.view.axial_view.canvas, "show_points_checkbox"):

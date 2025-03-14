@@ -115,7 +115,18 @@ class MainView(tk.Tk):
             # Set the default text color to red at startup
             update_option_menu_color()
             
+            pos_click_var = tk.BooleanVar(value=True)
+            tab.pos_click_var = pos_click_var
+            pos_click_checkbox = tk.Checkbutton(
+                tab,
+                text="Positive Click",
+                variable=pos_click_var
+            )
+            if not self.model.image:
+                pos_click_checkbox.config(state="disabled")
 
+            pos_click_checkbox.pack(pady=(5,2))
+            tab.pos_click_checkbox = pos_click_checkbox
 
             points_label = tk.Label(tab, text="Selected Points")
             points_label.pack(pady=(10, 2))
@@ -301,7 +312,7 @@ class MainView(tk.Tk):
         if canvas.show_points_var.get():
             current_tab = self.tabs[axis]
             for point in current_tab.points:
-                x, y, color = point
+                x, y, color, _ = point
                 self.plot_point(x, y, color, ax)
 
         canvas.draw()
@@ -363,11 +374,12 @@ class MainView(tk.Tk):
         
         points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
         
-        for idx, point in enumerate(current_tab.points_listbox.get(0, 'end')):
-            x, y = point.strip('()').split(',')
+        for idx, entry in enumerate(current_tab.points_listbox.get(0, 'end')):
+            pos_flag = 1 if "Positive click" in entry else 0
+            x, y = entry.split(' at ')[-1].strip('()').split(',')
             color = current_tab.points_listbox.itemcget(idx, "fg")
             k = 1 if color == "red" else 2 if color == "green" else 3
-            points[k].append((int(x), int(y), 1))
+            points[k].append((int(x), int(y), int(pos_flag)))
 
         self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix)
     
@@ -453,7 +465,7 @@ class MainView(tk.Tk):
         if self._redo_callback:
             self._redo_callback()
 
-    def add_point_to_listbox(self, x, y, color=None, active_index=None):
+    def add_point_to_listbox(self, x, y, pos_flag, color=None, active_index=None):
         if active_index is None:
             active_index = self.tabControl.index("current")
         current_tab = self.tabs[active_index]
@@ -461,7 +473,8 @@ class MainView(tk.Tk):
         if color is None:
             color = current_tab.pointer_color_var.get() or "Red"
         
-        current_tab.points_listbox.insert("end", f"({x},{y})")
+        prefix = "Positive click" if pos_flag else "Negative click"
+        current_tab.points_listbox.insert("end", f"{prefix} at ({x},{y})")
         idx=current_tab.points_listbox.size()-1
         try:
             """
