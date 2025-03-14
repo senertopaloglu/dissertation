@@ -34,8 +34,9 @@ class SegmentationController:
         if not is_nifti:
             file_path = DicomToNifti.convert(file_path)
         self.model.change_image(file_path)
-        self.refresh_selection_state()
         self.view.show_image()
+        self.refresh_selection_state()
+        self.view.reset_views()
 
     def handle_slice_request(self, axis, slice_index):
         """
@@ -55,61 +56,127 @@ class SegmentationController:
         x, y = int(event.xdata), int(event.ydata)
         color = pointer_color.lower()
 
+        # Use the canvas attribute to determine which tab to update.
+        if hasattr(event.canvas, "axis"):
+            active_index = event.canvas.axis
+            current_tab = self.view.tabs[active_index]
+        else:
+            # Fallback: use the current active tab
+            active_index = self.view.tabControl.index("current")
+            current_tab = self.view.tabs[active_index]
+
+        pos_flag = 1 if current_tab.pos_click_var.get() else 0
+
+        if current_tab.pos_click_checkbox["state"] == "disabled":
+            current_tab.pos_click_checkbox["state"] = "normal"
+        
         # Add to points list
-        self.points.append((x, y, color))
+        current_tab.points.append((x, y, color, pos_flag))
         # Clear the redo stack if a new point is added
-        self.redo_stack.clear()
+        current_tab.redo_stack.clear()
 
         # Update the View
-        self.view.add_point_to_listbox(x, y)
+        self.view.add_point_to_listbox(x, y, pos_flag, active_index=active_index)
         line = self.view.plot_point(x, y, color)
-        self.line_objects.append(line)
+        current_tab.line_objects.append(line)
 
     def undo(self):
         """
         Undo the last point addition.
         """
-        if not self.points:
+        active_index = self.view.tabControl.index("current")
+        current_tab = self.view.tabs[active_index]
+
+        if not current_tab.points:
             return
 
         # Pop the last point from points
-        last_point = self.points.pop()
-        self.undo_stack.append(last_point)
-        self.redo_stack.append(last_point)
+        last_point = current_tab.points.pop()
+        current_tab.undo_stack.append(last_point)
+        current_tab.redo_stack.append(last_point)
 
         # Remove from the View’s listbox and figure
         self.view.remove_last_point_from_listbox()
-        if self.line_objects:
-            last_line = self.line_objects.pop()
+        if current_tab.line_objects:
+            last_line = current_tab.line_objects.pop()
             last_line.remove()
-        self.view.draw_canvas()
+
+        if active_index == 0:
+            canvas = self.view.axial_view.canvas
+            label = "Axial View"
+            axis = 0
+        elif active_index == 1:
+            canvas = self.view.coronal_view.canvas
+            label = "Coronal View"
+            axis = 1
+        elif active_index == 2:
+            canvas = self.view.sagittal_view.canvas
+            label = "Sagittal View"
+            axis = 2
+        slice_idx = int(canvas.slider.get())
+        self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
 
     def redo(self):
         """
         Redo the last undone point addition.
         """
-        if not self.redo_stack:
+        active_index = self.view.tabControl.index("current")
+        current_tab = self.view.tabs[active_index]
+
+        if not current_tab.redo_stack:
             return
 
-        restored_point = self.redo_stack.pop()
-        self.points.append(restored_point)
-        self.undo_stack.append(restored_point)
+        restored_point = current_tab.redo_stack.pop()
+        current_tab.points.append(restored_point)
+        current_tab.undo_stack.append(restored_point)
 
-        x, y, color = restored_point
-        self.view.add_point_to_listbox(x, y)
-        line = self.view.plot_point(x, y, color)
-        self.line_objects.append(line)
-        self.view.draw_canvas()
+        x, y, color, pos_flag = restored_point
+        self.view.add_point_to_listbox(x, y, pos_flag, color=color)
+
+        if active_index == 0:
+            canvas = self.view.axial_view.canvas
+            label = "Axial View"
+            axis = 0
+        elif active_index == 1:
+            canvas = self.view.coronal_view.canvas
+            label = "Coronal View"
+            axis = 1
+        elif active_index == 2:
+            canvas = self.view.sagittal_view.canvas
+            label = "Sagittal View"
+            axis = 2
+        
+        self.view.plot_point(x, y, color, getattr(self.view, f"{label.lower().split()[0]}_view").canvas_ax)
+        slice_idx = int(canvas.slider.get())
+        self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
     
     def refresh_selection_state(self):
-        self.view.clear_listbox()
-        while self.line_objects:
-            last_line = self.line_objects.pop()
-            last_line.remove()
-        self.points = []
-        self.line_objects = []
-        self.undo_stack = []
-        self.redo_stack = []
+        # Iterate over all tabs and reset their state.
+        for tab in self.view.tabs:
+            # Clear the Listbox (if it exists)
+            if tab.points_listbox:
+                tab.points_listbox.delete(0, "end")
+            # Remove any drawn line objects from the canvas.
+            while tab.line_objects:
+                line = tab.line_objects.pop()
+                try:
+                    line.remove()
+                except Exception as e:
+                    print(f"Error removing line: {e}")
+            # Reset the lists and stacks.
+            tab.points = []
+            tab.undo_stack = []
+            tab.redo_stack = []
+            if hasattr(tab, "pos_click_checkbox"):
+                tab.pos_click_checkbox.config(state = "disabled")
+
+        # disable the show-points checkbox in each view if no points remain
+        if hasattr(self.view, "axial_view") and hasattr(self.view.axial_view.canvas, "show_points_checkbox"):
+            self.view.axial_view.canvas.show_points_checkbox.config(state="disabled")
+        if hasattr(self.view, "coronal_view") and hasattr(self.view.coronal_view.canvas, "show_points_checkbox"):
+            self.view.coronal_view.canvas.show_points_checkbox.config(state="disabled")
+        if hasattr(self.view, "sagittal_view") and hasattr(self.view.sagittal_view.canvas, "show_points_checkbox"):
+            self.view.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
     def segment_image(self, slices, points, frame_idx, axis_str_suffix):
         import modal_handler
@@ -152,7 +219,7 @@ class SegmentationController:
         print(f"Calling modal_handler.segment with foldername: {foldername}")
         video_segments=modal_handler.segment(slices, points, frame_idx, foldername)
         print("0. inside controller")
-        self.view.show_segmentation(video_segments)
+        self.view.show_segmentation(video_segments, axis_str_suffix)
         self.view.update_mesh_view(video_segments)
         print("segmenting image completed.")
         

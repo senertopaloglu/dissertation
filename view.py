@@ -48,14 +48,6 @@ class MainView(tk.Tk):
         self.sidebar = tk.Frame(self, bg="lightgray", padx=10, pady=10)
         self.sidebar.grid(row=0, column=0, rowspan=2, sticky="nsew")
 
-        # Prepare internal structures for user selections
-        self.points_listbox = None
-        
-        self.pointer_color_var = None
-        self.pointer_color_optionmenu = None
-
-        self.pointer_color_combobox = None
-
         # Build the UI
         self._build_sidebar()
 
@@ -70,73 +62,95 @@ class MainView(tk.Tk):
         btn_import = ttk.Button(self.sidebar, text="Import Image", command=self._import_image)
         btn_import.pack(fill="x", pady=5)
 
-        btn_segment = ttk.Button(self.sidebar, text="Segment Image", command=self._segment_image)
-        btn_segment.pack(fill="x", pady=5)
-
         btn_export = ttk.Button(self.sidebar, text="Export Image")
         btn_export.pack(fill="x", pady=5)
 
-        # Color dropdown
-        pointer_label = tk.Label(self.sidebar, text="Pointer Colour")
-        pointer_label.pack(pady=(10, 2))
+        tabControl = ttk.Notebook(self.sidebar)
+        tab1 = ttk.Frame(tabControl)
+        tab2 = ttk.Frame(tabControl)
+        tab3 = ttk.Frame(tabControl)
 
-        # Replace the ttk.Combobox with a tk.OptionMenu for colored options
-        pointer_color_var = tk.StringVar(value="Red")
+        tabControl.add(tab1, text="Axial")
+        tabControl.add(tab2, text="Coronal")
+        tabControl.add(tab3, text="Sagittal")
+        tabControl.pack(fill="x", pady=5) # TODO: if doesnt work, try pack(expand=1, fill="both")
 
-        # Define a callback to update the OptionMenu button color.
-        def update_option_menu_color(*args):
-            selected = pointer_color_var.get().lower()  # Convert to lowercase for consistency.
-            self.pointer_color_optionmenu.config(fg=selected, activeforeground=selected)
-        
-        pointer_color_var.trace_add("write", update_option_menu_color)
+        tabs = [tab1, tab2, tab3]
 
-        self.pointer_color_optionmenu = tk.OptionMenu(self.sidebar, pointer_color_var, "Red", "Blue", "Green")
-        self.pointer_color_optionmenu.pack(fill="x")
+        self.tabControl = tabControl
+        self.tabs = tabs
 
-        # Access the underlying menu and configure each item's text color
-        menu = self.pointer_color_optionmenu["menu"]
-        menu.entryconfig(0, foreground="red")
-        menu.entryconfig(1, foreground="blue")
-        menu.entryconfig(2, foreground="green")
+        for tab in tabs:
+            tab.pointer_color_var = None
+            tab.pointer_color_optionmenu = None
+            tab.points_listbox = None
+            tab.points = []
+            tab.line_objects = []
+            tab.undo_stack = []
+            tab.redo_stack = []
 
-        # Set the default text color to red at startup
-        update_option_menu_color()
+        for tab in tabs:
+            pointer_label = tk.Label(tab, text="Pointer Colour")
+            pointer_label.pack(pady=(10, 2))
 
-        # Optionally, store the variable for later use:
-        self.pointer_color_var = pointer_color_var
+            pointer_color_var = tk.StringVar(value="Red")
+            tab.pointer_color_var = pointer_color_var
 
+            # Define a callback to update the OptionMenu button color.
+            def update_option_menu_color(*args, current_tab=tab):
+                selected = current_tab.pointer_color_var.get().lower()  # Convert to lowercase for consistency.
+                current_tab.pointer_color_optionmenu.config(fg=selected, activeforeground=selected)
+            
+            tab.pointer_color_var.trace_add("write", update_option_menu_color)
 
+            tab.pointer_color_optionmenu = tk.OptionMenu(tab, tab.pointer_color_var, "Red", "Blue", "Green")
+            tab.pointer_color_optionmenu.pack(fill="x")
 
-        self.pointer_color_combobox = ttk.Combobox(
-            self.sidebar,
-            values=["Red", "Blue", "Green"]
-        )
-        self.pointer_color_combobox.pack(fill="x")
-        self.pointer_color_combobox.set("Red")
+            # Access the underlying menu and configure each item's text color
+            menu = tab.pointer_color_optionmenu["menu"]
+            menu.entryconfig(0, foreground="red")
+            menu.entryconfig(1, foreground="blue")
+            menu.entryconfig(2, foreground="green")
 
-        # Selected points listbox
-        points_label = tk.Label(self.sidebar, text="Selected Points")
-        points_label.pack(pady=(10, 2))
+            # Set the default text color to red at startup
+            update_option_menu_color()
+            
+            pos_click_var = tk.BooleanVar(value=True)
+            tab.pos_click_var = pos_click_var
+            pos_click_checkbox = tk.Checkbutton(
+                tab,
+                text="Positive Click",
+                variable=pos_click_var
+            )
+            if not self.model.image:
+                pos_click_checkbox.config(state="disabled")
 
-        points_frame = tk.Frame(self.sidebar)
-        points_frame.pack(fill="x")
+            pos_click_checkbox.pack(pady=(5,2))
+            tab.pos_click_checkbox = pos_click_checkbox
 
-        scrollbar = tk.Scrollbar(points_frame, orient="vertical")
-        self.points_listbox = tk.Listbox(
-            points_frame, 
-            height=5, 
-            yscrollcommand=scrollbar.set
-        )
-        self.points_listbox.pack(side="left", fill="x", expand=True)
-        scrollbar.config(command=self.points_listbox.yview)
-        scrollbar.pack(side="right", fill="y")
+            points_label = tk.Label(tab, text="Selected Points")
+            points_label.pack(pady=(10, 2))
 
-        # Undo/Redo
-        btn_undo = ttk.Button(self.sidebar, text="Undo", command=self._on_undo_click)
-        btn_undo.pack(fill="x", pady=2)
+            points_frame = tk.Frame(tab)
+            points_frame.pack(fill="x")
 
-        btn_redo = ttk.Button(self.sidebar, text="Redo", command=self._on_redo_click)
-        btn_redo.pack(fill="x", pady=2)
+            scrollbar = tk.Scrollbar(points_frame, orient="vertical")
+            tab.points_listbox = tk.Listbox(
+                points_frame,
+                height=5,
+                yscrollcommand=scrollbar.set
+            )
+            tab.points_listbox.pack(side="left", fill="x", expand=True)
+            scrollbar.config(command=tab.points_listbox.yview)
+            scrollbar.pack(side="right", fill="y")
+
+            btn_undo = ttk.Button(tab, text="Undo", command=self._on_undo_click)
+            btn_undo.pack(fill="x", pady=2)
+            btn_redo = ttk.Button(tab, text="Redo", command=self._on_redo_click)
+            btn_redo.pack(fill="x", pady=2)
+
+            tab.btn_segment = ttk.Button(tab, text="Segment Image", command=self._segment_image)
+            tab.btn_segment.pack(fill="x", pady=5)
 
     def _build_image_frames(self):
         """
@@ -180,14 +194,21 @@ class MainView(tk.Tk):
         """
         print("4. start view._create_image_frame. axis=", axis)
         frame = tk.Frame(self, bd=1, relief="solid")
+        
         label = tk.Label(frame, text=text)
         label.pack()
 
+        control_frame = tk.Frame(frame)
+        control_frame.pack(side="top", fill="x", padx=5, pady=5)
+
         fig, ax = plt.subplots(figsize=(4,4))
         canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.tab_index = axis
         canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
 
         frame.canvas = canvas
+        canvas.axis = axis
+        frame.canvas_ax=ax
 
         # Connect click events
         fig.canvas.mpl_connect(
@@ -203,7 +224,7 @@ class MainView(tk.Tk):
 
             # Slider to navigate slices
             slider = ttk.Scale(
-                frame, 
+                control_frame, 
                 from_=0, 
                 to=max_slice, 
                 orient="horizontal",
@@ -218,22 +239,36 @@ class MainView(tk.Tk):
             show_mask_var=tk.BooleanVar()
             canvas.show_mask_var = show_mask_var
             # when checkbox is clicked, show_mask_var is auto updated
-            checkbox = tk.Checkbutton(
-                frame,
+            show_mask_checkbox = tk.Checkbutton(
+                control_frame,
                 text="Show Segmentation Mask",
                 variable=show_mask_var,
                 command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
             )
-            checkbox.pack(side="top", fill="x", pady=5)
+            show_mask_checkbox.pack(side="top", fill="x", pady=5)
 
             if axis==0 and self.axial_view_mask is None:
-                checkbox.config(state="disabled")
+                show_mask_checkbox.config(state="disabled")
             if axis==1 and self.coronal_view_mask is None:
-                checkbox.config(state="disabled")
+                show_mask_checkbox.config(state="disabled")
             if axis==2 and self.sagittal_view_mask is None:
-                checkbox.config(state="disabled")
+                show_mask_checkbox.config(state="disabled")
 
-            canvas.checkbox = checkbox
+            canvas.show_mask_checkbox = show_mask_checkbox
+
+            # check box to show/hide points
+            show_points_var=tk.BooleanVar(value=True) 
+            canvas.show_points_var = show_points_var
+            show_points_checkbox = tk.Checkbutton(
+                control_frame,
+                text="Show Points",
+                variable=show_points_var,
+                command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text)
+            )
+            show_points_checkbox.pack(side="top", fill="x", pady=5)
+            #initially disable the checkbox because there are no points to show yet
+            show_points_checkbox.config(state="disabled")
+            canvas.show_points_checkbox = show_points_checkbox
             
             # Initialize the slice display
             self._update_slice(ax, canvas, axis, initial_slice, text)
@@ -274,6 +309,12 @@ class MainView(tk.Tk):
                 for out_obj_id, out_mask in self.sagittal_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
         
+        if canvas.show_points_var.get():
+            current_tab = self.tabs[axis]
+            for point in current_tab.points:
+                x, y, color, _ = point
+                self.plot_point(x, y, color, ax)
+
         canvas.draw()
         self.update_idletasks()
         self.update()
@@ -308,56 +349,61 @@ class MainView(tk.Tk):
         if self.last_used_axis is None or self.last_used_slice_index is None:
             print("No slice selected for segmentation.")
             return
-        axis_str = self.last_used_axis
-        if "Axial" in axis_str:
+        
+        active_index = self.tabControl.index("current")
+        current_tab = self.tabs[active_index]
+
+        if active_index == 0:
             axis = 0
             axis_str_suffix = "AXIAL"
-        elif "Coronal" in axis_str:
+            frame_idx = int(self.axial_view.canvas.slider.get())
+            slice_array = self._slice_request_callback(axis, frame_idx)
+        elif active_index == 1:
             axis = 1
             axis_str_suffix = "CORONAL"
-        elif "Sagittal" in axis_str:
+            frame_idx = int(self.coronal_view.canvas.slider.get())
+            slice_array = self._slice_request_callback(axis, frame_idx)
+        elif active_index == 2:
             axis = 2
             axis_str_suffix = "SAGITTAL"
+            frame_idx = int(self.sagittal_view.canvas.slider.get())
+            slice_array = self._slice_request_callback(axis, frame_idx)
         else:
             raise ValueError("Invalid axis string.")
-        
-        slice_array = self._slice_request_callback(axis, self.last_used_slice_index) # get slice array from most recent canvas/axes
+            return
         
         points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
-        for idx, point in enumerate(self.points_listbox.get(0, 'end')):
-            x, y = point.strip('()').split(',')
-            color = self.points_listbox.itemcget(idx, "fg")
+        
+        for idx, entry in enumerate(current_tab.points_listbox.get(0, 'end')):
+            pos_flag = 1 if "Positive click" in entry else 0
+            x, y = entry.split(' at ')[-1].strip('()').split(',')
+            color = current_tab.points_listbox.itemcget(idx, "fg")
             k = 1 if color == "red" else 2 if color == "green" else 3
-            points[k].append((int(x), int(y), 1))
+            points[k].append((int(x), int(y), int(pos_flag)))
 
-        self.controller.segment_image(slice_array, points, self.last_used_slice_index, axis_str_suffix)
+        self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix)
     
     def show_image(self):
         self._build_image_frames()
     
-    def show_segmentation(self, segmentation_mask):
+    def show_segmentation(self, segmentation_mask, axis_str_suffix):
         """
         Display the segmentation mask in view of self.last_used_axis.
         """
         print("1. a) inside view.show_segmentation")
         axis_str = self.last_used_axis
 
-        if "Axial" in axis_str:
-            print("1. b. a) inside view.show_segmentation axial")
+        if axis_str_suffix == "AXIAL":
             axis = self.axial_view
             self.axial_view_mask=segmentation_mask
             label = "Axial View"
             axis_num=0
-            print("1. b. b) inside view.show_segmentation axial")
-        elif "Coronal" in axis_str:
-            print("1. c. a) inside view.show_segmentation coronal")
+        elif axis_str_suffix == "CORONAL":
             axis = self.coronal_view
             self.coronal_view_mask=segmentation_mask
             label = "Coronal View"
             axis_num=1
-            print("1. c. b) inside view.show_segmentation coronal")
-        elif "Sagittal" in axis_str:
-            print("1. d. a) inside view.show_segmentation sagittal")
+        elif axis_str_suffix == "SAGITTAL":
             axis = self.sagittal_view
             self.sagittal_view_mask=segmentation_mask
             label = "Sagittal View"
@@ -365,12 +411,14 @@ class MainView(tk.Tk):
             print("1. d. b) inside view.show_segmentation sagittal")
         else:
             raise ValueError("Invalid axis string.")
+            return
         canvas = axis.canvas
-        canvas.checkbox.config(state="normal")
+        canvas.show_mask_checkbox.config(state="normal")
         canvas.show_mask_var.set(True)
+        slice_idx = int(canvas.slider.get())
 
-        self._update_slice(canvas.figure.axes[0], canvas, axis_num, self.last_used_slice_index, label)  
-        print("1. e) inside view.show_segmentation")      
+        self._update_slice(canvas.figure.axes[0], canvas, axis_num, slice_idx, label)  
+        print("1. e) finish view.show_segmentation")      
 
     def set_on_click_callback(self, callback):
         """Sets the callback invoked on mouse click in the figure."""
@@ -400,7 +448,11 @@ class MainView(tk.Tk):
         self.last_used_slice_index = int(canvas.slider.get())
 
         if self._on_click_callback is not None:
-            color = self.pointer_color_var.get() if self.pointer_color_var else "Red"
+            # Use the canvas’ own tab index if available; fallback to current tab.
+            active_index = getattr(canvas, "tab_index", self.tabControl.index("current"))
+            current_tab = self.tabs[active_index]
+            color = current_tab.pointer_color_var.get() if current_tab.pointer_color_var else "Red"
+            
             self._on_click_callback(event, color)
 
         # Redraw after any changes
@@ -414,42 +466,114 @@ class MainView(tk.Tk):
         if self._redo_callback:
             self._redo_callback()
 
-    def add_point_to_listbox(self, x, y):
-        color = self.pointer_color_var.get() if self.pointer_color_var and self.pointer_color_var.get() else "Red"
-        self.points_listbox.insert("end", f"({x},{y})")
-        idx=self.points_listbox.size()-1
+    def add_point_to_listbox(self, x, y, pos_flag, color=None, active_index=None):
+        if active_index is None:
+            active_index = self.tabControl.index("current")
+        current_tab = self.tabs[active_index]
+        
+        if color is None:
+            color = current_tab.pointer_color_var.get() or "Red"
+        
+        prefix = "Positive click" if pos_flag else "Negative click"
+        current_tab.points_listbox.insert("end", f"{prefix} at ({x},{y})")
+        idx=current_tab.points_listbox.size()-1
         try:
             """
             Tkinters standard Listbox widget doesnt offer robust per-item styling in all versions.
             If Tk version supports it (typically Tk 8.6 or later), you can use the Listbox's item configuration to set the foreground color for each item.
             """
-            self.points_listbox.itemconfig(idx, {'fg': color.lower()})
+            current_tab.points_listbox.itemconfig(idx, {'fg': color.lower()})
         except Exception as e:
             print(f"Could not set item color: {e}")
-        self.points_listbox.yview_moveto(1.0)
+        current_tab.points_listbox.yview_moveto(1.0)
+
+        if active_index==0:
+            self.axial_view.canvas.show_points_checkbox.config(state="normal")
+        if active_index==1:
+            self.coronal_view.canvas.show_points_checkbox.config(state="normal")
+        if active_index==2:
+            self.sagittal_view.canvas.show_points_checkbox.config(state="normal")
 
     def remove_last_point_from_listbox(self):
-        if self.points_listbox.size() > 0:
-            self.points_listbox.delete("end")
+        active_index = self.tabControl.index("current")
+        current_tab = self.tabs[active_index]
+        if current_tab.points_listbox.size() > 0:
+            current_tab.points_listbox.delete("end")
+        else:
+            if active_index == 0:
+                self.axial_view.canvas.show_points_checkbox.config(state="disabled")
+            elif active_index == 1:
+                self.coronal_view.canvas.show_points_checkbox.config(state="disabled")
+            elif active_index == 2:
+                self.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
     def clear_listbox(self):
-        self.points_listbox.delete(0, "end")
+        active_index = self.tabControl.index("current")
+        current_tab = self.tabs[active_index]
+        current_tab.points_listbox.delete(0, "end")
+        
+        canvas = None
+        if active_index == 0:
+            canvas = self.axial_view.canvas
+        elif active_index == 1:
+            canvas = self.coronal_view.canvas
+        elif active_index == 2:
+            canvas = self.sagittal_view.canvas
+        
+        if canvas and hasattr(canvas, 'show_points_checkbox'):
+            canvas.show_points_checkbox.config(state="disabled")
 
-    def plot_point(self, x, y, color):
+    def plot_point(self, x, y, color, ax=None):
         """
         Plot the point on the 'most recently used' Axes (which is the last user-clicked Axes).
         Since we have multiple Axes, we can track the event.inaxes or store references from the event.
         """
         # We can glean the current figure from plt.gcf(), but typically you'd keep references.
-        ax = plt.gca()
+        if ax is None:
+            ax = plt.gca()
         mpl_color = {'red': 'r', 'green': 'g', 'blue': 'b'}.get(color.lower(), 'r')
         return ax.plot(x, y, mpl_color + 'o')[0]
 
-    def draw_canvas(self):
+    def draw_canvas(self, ax_idx=None):
         """
         Redraw the active matplotlib figure.
         """
-        plt.gcf().canvas.draw()
+        if ax_idx is None:
+            plt.gcf().canvas.draw()
+            return
+        if ax_idx == 0:
+            canvas = self.axial_view.canvas
+        elif ax_idx == 1:
+            canvas = self.coronal_view.canvas
+        elif ax_idx == 2:
+            canvas = self.sagittal_view.canvas
+        else:
+            canvas = plt.gcf().canvas  # fallback, though it should not happen
+        canvas.draw()
+
+    def reset_views(self):
+        """
+        Force a refresh of all image frames to remove lingering drawn points.
+        """
+        if self.model.image:
+            try:
+                slider_val = int(self.axial_view.canvas.slider.get())
+                self._update_slice(self.axial_view.canvas.figure.axes[0],
+                                   self.axial_view.canvas, 0, slider_val, "Axial View")
+            except Exception as e:
+                print("Error resetting axial view:", e)
+            try:
+                slider_val = int(self.coronal_view.canvas.slider.get())
+                self._update_slice(self.coronal_view.canvas.figure.axes[0],
+                                   self.coronal_view.canvas, 1, slider_val, "Coronal View")
+            except Exception as e:
+                print("Error resetting coronal view:", e)
+            try:
+                slider_val = int(self.sagittal_view.canvas.slider.get())
+                self._update_slice(self.sagittal_view.canvas.figure.axes[0],
+                                   self.sagittal_view.canvas, 2, slider_val, "Sagittal View")
+            except Exception as e:
+                print("Error resetting sagittal view:", e)
     
     def update_mesh_view(self, video_segments):
         """
