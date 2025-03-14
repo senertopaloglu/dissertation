@@ -62,9 +62,6 @@ class MainView(tk.Tk):
         btn_import = ttk.Button(self.sidebar, text="Import Image", command=self._import_image)
         btn_import.pack(fill="x", pady=5)
 
-        btn_segment = ttk.Button(self.sidebar, text="Segment Image", command=self._segment_image)
-        btn_segment.pack(fill="x", pady=5)
-
         btn_export = ttk.Button(self.sidebar, text="Export Image")
         btn_export.pack(fill="x", pady=5)
 
@@ -143,24 +140,6 @@ class MainView(tk.Tk):
 
             tab.btn_segment = ttk.Button(tab, text="Segment Image", command=self._segment_image)
             tab.btn_segment.pack(fill="x", pady=5)
-
-        # Color dropdown
-        pointer_label = tk.Label(self.sidebar, text="Pointer Colour")
-        pointer_label.pack(pady=(10, 2))
-
-        # Selected points listbox
-        points_label = tk.Label(self.sidebar, text="Selected Points")
-        points_label.pack(pady=(10, 2))
-
-        points_frame = tk.Frame(self.sidebar)
-        points_frame.pack(fill="x")
-
-        # Undo/Redo
-        btn_undo = ttk.Button(self.sidebar, text="Undo", command=self._on_undo_click)
-        btn_undo.pack(fill="x", pady=2)
-
-        btn_redo = ttk.Button(self.sidebar, text="Redo", command=self._on_redo_click)
-        btn_redo.pack(fill="x", pady=2)
 
     def _build_image_frames(self):
         """
