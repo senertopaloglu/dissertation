@@ -441,7 +441,8 @@ class MainView(tk.Tk):
         x_dim = shape[1]
         y_dim = shape[2]
         combined_meshes = {obj_id : np.zeros((z_dim, x_dim, y_dim), dtype=int) for obj_id in first_frame_object_ids}
-        combined_mesh = np.zeros((z_dim, x_dim, y_dim), dtype=int)
+        
+        #combined_mesh = np.zeros((z_dim, x_dim, y_dim), dtype=int)
 
         # Populate the 3D array with the segmentation masks and image data
         for z, frame_data in video_segments.items():
@@ -456,8 +457,13 @@ class MainView(tk.Tk):
         ax = fig.add_subplot(111, projection='3d')
 
         cmap = plt.get_cmap('tab10')
+
+        downsample_factor = 0.85 # Downsample factor for faster rendering
+
         for obj_id, combined_mesh in combined_meshes.items():
-            verts, faces, _, _ = measure.marching_cubes(combined_mesh, level=0.5)
+            downsampled = ndimage.zoom(combined_mesh, zoom=downsample_factor, order=0)
+            verts, faces, _, _ = measure.marching_cubes(downsampled, level=0.5) # faster, optimised version of measure.marching_cubes
+            verts = verts / downsample_factor  # Rescale to original dimensions
             color = cmap(obj_id % 10)
             ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], color=color, alpha=0.7)
 
