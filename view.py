@@ -557,6 +557,30 @@ class MainView(tk.Tk):
         else:
             canvas = plt.gcf().canvas  # fallback, though it should not happen
         canvas.draw()
+
+    def reset_views(self):
+        """
+        Force a refresh of all image frames to remove lingering drawn points.
+        """
+        if self.model.image:
+            try:
+                slider_val = int(self.axial_view.canvas.slider.get())
+                self._update_slice(self.axial_view.canvas.figure.axes[0],
+                                   self.axial_view.canvas, 0, slider_val, "Axial View")
+            except Exception as e:
+                print("Error resetting axial view:", e)
+            try:
+                slider_val = int(self.coronal_view.canvas.slider.get())
+                self._update_slice(self.coronal_view.canvas.figure.axes[0],
+                                   self.coronal_view.canvas, 1, slider_val, "Coronal View")
+            except Exception as e:
+                print("Error resetting coronal view:", e)
+            try:
+                slider_val = int(self.sagittal_view.canvas.slider.get())
+                self._update_slice(self.sagittal_view.canvas.figure.axes[0],
+                                   self.sagittal_view.canvas, 2, slider_val, "Sagittal View")
+            except Exception as e:
+                print("Error resetting sagittal view:", e)
     
     def update_mesh_view(self, video_segments):
         """

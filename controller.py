@@ -36,6 +36,7 @@ class SegmentationController:
         self.model.change_image(file_path)
         self.view.show_image()
         self.refresh_selection_state()
+        self.view.reset_views()
 
     def handle_slice_request(self, axis, slice_index):
         """
@@ -146,16 +147,30 @@ class SegmentationController:
         self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
     
     def refresh_selection_state(self):
-        active_index = self.view.tabControl.index("current")
-        current_tab = self.view.tabs[active_index]
-        self.view.clear_listbox()
-        while current_tab.line_objects:
-            last_line = current_tab.line_objects.pop()
-            last_line.remove()
-        current_tab.points = []
-        current_tab.line_objects = []
-        current_tab.undo_stack = []
-        current_tab.redo_stack = []
+        # Iterate over all tabs and reset their state.
+        for tab in self.view.tabs:
+            # Clear the Listbox (if it exists)
+            if tab.points_listbox:
+                tab.points_listbox.delete(0, "end")
+            # Remove any drawn line objects from the canvas.
+            while tab.line_objects:
+                line = tab.line_objects.pop()
+                try:
+                    line.remove()
+                except Exception as e:
+                    print(f"Error removing line: {e}")
+            # Reset the lists and stacks.
+            tab.points = []
+            tab.undo_stack = []
+            tab.redo_stack = []
+
+        # disable the show-points checkbox in each view if no points remain
+        if hasattr(self.view, "axial_view") and hasattr(self.view.axial_view.canvas, "show_points_checkbox"):
+            self.view.axial_view.canvas.show_points_checkbox.config(state="disabled")
+        if hasattr(self.view, "coronal_view") and hasattr(self.view.coronal_view.canvas, "show_points_checkbox"):
+            self.view.coronal_view.canvas.show_points_checkbox.config(state="disabled")
+        if hasattr(self.view, "sagittal_view") and hasattr(self.view.sagittal_view.canvas, "show_points_checkbox"):
+            self.view.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
     def segment_image(self, slices, points, frame_idx, axis_str_suffix):
         import modal_handler
