@@ -37,6 +37,8 @@ class SegmentationController:
         self.view.show_image()
         self.refresh_selection_state()
         self.view.reset_views()
+        # clear the mesh view so that it stays empty until segmentation is done.
+        self.view.clear_mesh_view()
 
     def handle_slice_request(self, axis, slice_index):
         """
@@ -228,6 +230,6 @@ class SegmentationController:
         video_segments=modal_handler.segment(slices, points, frame_idx, foldername)
         print("0. inside controller")
         self.view.show_segmentation(video_segments, axis_str_suffix)
-        self.view.update_mesh_view(video_segments)
+        self.view.update_mesh_view(video_segments, axis_str_suffix)
         print("segmenting image completed.")
         

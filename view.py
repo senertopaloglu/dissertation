@@ -177,7 +177,7 @@ class MainView(tk.Tk):
         self.axial_view = self._create_image_frame("Axial View", axis=0)
         self.coronal_view = self._create_image_frame("Coronal View", axis=1)
         self.sagittal_view = self._create_image_frame("Sagittal View", axis=2)
-        self.mesh_view = self._create_image_frame("Segmentation Result (Axial)", axis=0)
+        self.mesh_view = self._create_mesh_view_frame("Segmentation Result (3D Mesh View)")
 
         # Attach these views to the grid
         self.axial_view.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
@@ -291,6 +291,26 @@ class MainView(tk.Tk):
         print("4. b) inside view._create_image_frame, now not in the big if statement")
 
         return frame
+    
+    def _create_mesh_view_frame(self, text):
+        """
+        Creates a dedicated frame for the 3D mesh view that is initially empty and
+        ignores click events.
+        """
+        frame = tk.Frame(self, bd=1, relief="solid")
+        
+        label = tk.Label(frame, text=text)
+        label.pack()
+        frame.label = label
+
+        fig, ax = plt.subplots(figsize=(4,4))
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
+        frame.canvas = canvas
+        frame.canvas_ax=ax
+
+        return frame
+
 
     def _update_slice(self, ax, canvas, axis, val, text):
         """
@@ -588,9 +608,10 @@ class MainView(tk.Tk):
             except Exception as e:
                 print("Error resetting sagittal view:", e)
     
-    def update_mesh_view(self, video_segments):
+    def update_mesh_view(self, video_segments, axis_str_suffix):
         """
-        Update mesh view
+        Update mesh view with the segmentation result and update the label to
+        reflect the view used for segmentation.
         """
         print("******** START: UPDATE MESH VIEW ********")
         # Step 1: Convert segmented frames into a 3D volume
@@ -630,10 +651,14 @@ class MainView(tk.Tk):
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
-        ax.set_title('3D Mesh of Video Segmentation')  
+        ax.set_title('3D Mesh View')  
 
         self.mesh_view.canvas.draw()
-        
+
+        # update the mesh view label
+        if hasattr(self.mesh_view, "label"):
+            new_text = f"{axis_str_suffix.title()} Segmentation Result (3D Mesh View)"
+            self.mesh_view.label.config(text=new_text)
 
         """
         OLD APPROACH
@@ -678,6 +703,18 @@ class MainView(tk.Tk):
         plt.show()
         """
         print("******** END: UPDATE MESH VIEW ********")
+
+    def clear_mesh_view(self):
+        """
+        Clears the 3D mesh view (i.e. removes any previously segmented mesh).
+        """
+        fig = self.mesh_view.canvas.figure
+        fig.clf()  # Clear all content from the figure
+        # Re-create an empty 3D axes with a title.
+        ax = fig.add_subplot(111, projection='3d')
+        self.mesh_view.label.configure(text="Segmentation Result (3D Mesh View)")
+        ax.set_title("3D Mesh View")
+        self.mesh_view.canvas.draw()
 
     def _on_close(self):
         """
