@@ -114,14 +114,14 @@ def do_some_magic(points, frame_idx, foldername):
 
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
 
-    print("*********************")
-    print(os.getcwd())
+    # print("*********************")
+    # print(os.getcwd())
 
     # `video_dir` a directory of JPEG frames with filenames like `<frame_index>.jpg`
     video_dir = f"./frames/{foldername}"
 
-    print(os.listdir(video_dir))
-    print("*********************")
+    # print(os.listdir(video_dir))
+    # print("*********************")
 
     # scan all the JPEG frame names in this directory
     frame_names = [
@@ -197,7 +197,7 @@ def segment(slices, points, frame_idx, foldername):
     """
     segmentation functionality.
     """
-    print(app.name)
+    # print(app.name)
     with modal.enable_output():
         with app.run():
             video_segments=do_some_magic.remote(points, frame_idx, foldername)
@@ -216,5 +216,5 @@ def segment(slices, points, frame_idx, foldername):
     #     for out_obj_id, out_mask in video_segments[out_frame_idx].items():
     #         show_mask(out_mask, plt.gca(), obj_id=out_obj_id)
     # plt.show()
-    print("finished in handler, returning to controller")
+    # print("finished in handler, returning to controller")
     return video_segments
