@@ -189,7 +189,6 @@ class MainView(tk.Tk):
         self.update()
     
     def show_mask(self, mask, ax, obj_id=None, random_color=False):
-        print("SHOW MASK: START")
         if random_color:
             color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
         else:
@@ -199,13 +198,11 @@ class MainView(tk.Tk):
         h, w = mask.shape[-2:]
         mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
         ax.imshow(mask_image)
-        print("SHOW MASK: END")
 
     def _create_image_frame(self, text, axis):
         """
         Helper to create a labeled frame with a matplotlib FigureCanvas and a slider.
         """
-        print("4. start view._create_image_frame. axis=", axis)
         frame = tk.Frame(self, bd=1, relief="solid")
         
         label = tk.Label(frame, text=text)
@@ -230,7 +227,6 @@ class MainView(tk.Tk):
         )
 
         if self.model.image:
-            print("4. a) inside view._create_image_frame, when self.model.image is not None")
             sizes = self.model.image.GetLargestPossibleRegion().GetSize()
             dim = 2 if axis == 0 else 1 if axis == 1 else 0
             max_slice = sizes[dim] - 1
@@ -288,8 +284,6 @@ class MainView(tk.Tk):
 
             canvas.slider = slider
 
-        print("4. b) inside view._create_image_frame, now not in the big if statement")
-
         return frame
     
     def _create_mesh_view_frame(self, text):
@@ -316,29 +310,23 @@ class MainView(tk.Tk):
         """
         Update the displayed slice in the given axis whenever the slider changes.
         """
-        print("2. a) start view._update_slice")
         if self._slice_request_callback is None:
             return
         
         slice_index = int(float(val))
         slice_array = self._slice_request_callback(axis, slice_index)
-        print("2. b) inside view._update_slice, self._slice_request_callback = ", self._slice_request_callback)
-        print("2. c) inside view._update_slice, slice_array = ", slice_array)
         ax.clear()
         ax.imshow(slice_array, cmap='gray')
         ax.set_title(f"{text} - Slice {slice_index}")
 
         if canvas.show_mask_var.get():
             if axis == 0:
-                print("2. d) inside view._update_slice, axis == 0 (axial)")
                 for out_obj_id, out_mask in self.axial_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
             if axis==1:
-                print("2. d) inside view._update_slice, axis == 1 (coronal)")
                 for out_obj_id, out_mask in self.coronal_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
             if axis==2:
-                print("2. d) inside view._update_slice, axis == 2 (sagittal)")
                 for out_obj_id, out_mask in self.sagittal_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
         
@@ -423,7 +411,6 @@ class MainView(tk.Tk):
         """
         Display the segmentation mask in view of self.last_used_axis.
         """
-        print("1. a) inside view.show_segmentation")
         axis_str = self.last_used_axis
 
         if axis_str_suffix == "AXIAL":
@@ -441,7 +428,6 @@ class MainView(tk.Tk):
             self.sagittal_view_mask=segmentation_mask
             label = "Sagittal View"
             axis_num=2
-            print("1. d. b) inside view.show_segmentation sagittal")
         else:
             raise ValueError("Invalid axis string.")
             return
@@ -450,8 +436,7 @@ class MainView(tk.Tk):
         canvas.show_mask_var.set(True)
         slice_idx = int(canvas.slider.get())
 
-        self._update_slice(canvas.figure.axes[0], canvas, axis_num, slice_idx, label)  
-        print("1. e) finish view.show_segmentation")      
+        self._update_slice(canvas.figure.axes[0], canvas, axis_num, slice_idx, label)      
 
     def set_on_click_callback(self, callback):
         """Sets the callback invoked on mouse click in the figure."""
@@ -477,7 +462,6 @@ class MainView(tk.Tk):
             return
         
         self.last_used_axis = ax.get_title()
-        print(f"last used canvas {canvas.slider.get()}")
         self.last_used_slice_index = int(canvas.slider.get())
 
         if self._on_click_callback is not None:
@@ -613,7 +597,6 @@ class MainView(tk.Tk):
         Update mesh view with the segmentation result and update the label to
         reflect the view used for segmentation.
         """
-        print("******** START: UPDATE MESH VIEW ********")
         # Step 1: Convert segmented frames into a 3D volume
         z_dim = len(video_segments) # Number of frames
         first_frame_object_ids = list(video_segments[0].keys())
@@ -649,8 +632,6 @@ class MainView(tk.Tk):
             color = cmap(obj_id % 10)
             ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], color=color, alpha=0.7)
 
-        print("3D MESH COMPUTATION FINISHED.")
-
         #ax.plot_trisurf(verts_non_segmented[:, 0], verts_non_segmented[:, 1], faces_non_segmented, verts_non_segmented[:, 2], color='grey', alpha=0.3)
         
         # Customize the plot (optional)
@@ -665,50 +646,6 @@ class MainView(tk.Tk):
         if hasattr(self.mesh_view, "label"):
             new_text = f"{axis_str_suffix.title()} Segmentation Result (3D Mesh View)"
             self.mesh_view.label.config(text=new_text)
-
-        """
-        OLD APPROACH
-
-        frame_indices = sorted(list(video_segments.keys()))
-        h,w=list(video_segments.values())[0][list(video_segments.values())[0].keys()[0]].shape
-        num_slices = len(frame_indices)
-        volume = np.zeros((num_slices, h, w), dtype=np.uint8)
-
-        for i, frame_idx in enumerate(frame_indices):
-            for obj_id, mask in video_segments[frame_idx].items():
-                volume[i] = np.maximum(volume[i], mask.astype(np.uint8))
-
-        # Step 2: Apply a 3D surface extraction algorithm (Marching Cubes alternative)
-        verts, faces = ndimage.measurements.center_of_mass(volume, labels=volume, index=np.unique(volume)[1:]), []
-        
-        for z in range(volume.shape[0] - 1):
-            for y in range(volume.shape[1] - 1):
-                for x in range(volume.shape[2] - 1):
-                    cube = volume[z:z+2, y:y+2, x:x+2]
-                    if np.any(cube):
-                        faces.append([(x, y, z), (x+1, y, z), (x, y+1, z)])
-                        faces.append([(x+1, y+1, z), (x, y+1, z), (x+1, y, z)])
-
-        faces = np.array(faces)
-
-        # Step 3: Create a mesh object
-        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-
-        # Step 4: Visualize the 3D mesh using Matplotlib
-        fig = plt.figure(figsize=(10, 10))
-        ax = fig.add_subplot(111, projection='3d')
-        mesh_plot = Poly3DCollection(verts[faces], alpha=0.7)
-        mesh_plot.set_facecolor((0.3, 0.6, 1, 0.6))  # Light blue with transparency
-        ax.add_collection3d(mesh_plot)
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
-        ax.set_xlim(0, volume.shape[2])
-        ax.set_ylim(0, volume.shape[1])
-        ax.set_zlim(0, volume.shape[0])
-        plt.show()
-        """
-        print("******** END: UPDATE MESH VIEW ********")
 
     def clear_mesh_view(self):
         """
