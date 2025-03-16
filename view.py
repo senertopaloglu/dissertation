@@ -3,7 +3,7 @@ import os
 from collections import defaultdict
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -164,6 +164,14 @@ class MainView(tk.Tk):
 
             tab.btn_segment = ttk.Button(tab, text="Segment Image", command=self._segment_image)
             tab.btn_segment.pack(fill="x", pady=5)
+
+            # automated multiresolution segmentation button
+            tab.btn_auto_seg = ttk.Button(
+                tab,
+                text="Automated multiresolution segmentation",
+                command=lambda t=tab: self.controller.automated_multires_segmentation(t)
+            )
+            tab.btn_auto_seg.pack(fill="x", pady=5)
 
     def _build_image_frames(self):
         """
