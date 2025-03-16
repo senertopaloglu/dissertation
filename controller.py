@@ -328,21 +328,17 @@ class SegmentationController:
             shutil.rmtree(local_folder)
 
         # Step 1: Convert NIfTI to JPG and create local folder
-        print(f"Running nifti_to_jpg.py using python executable at {sys.executable}, with arguments: {self.model.filename}, {local_folder}")
         # sys.executable will auto select the running Python interpreter (supports cross-platform)
         subprocess.run([sys.executable, "nifti_to_jpg.py", self.model.filename, local_folder, "--axis", axis_str_suffix.lower()], check=True)
 
         # Step 2: Delete folder in modal
         # do not check=True because no graceful handling if folder not exists in modal volume
-        print(f"Deleting folder in modal: SAM_2_Medical_3D/frames/{foldername}")
         subprocess.run(["modal", "volume", "rm", "-r", "sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
 
         # Step 3: Create folder and transfer files to modal
-        print(f"Transferring files to modal: {local_folder} to SAM_2_Medical_3D/frames/{foldername}")
         subprocess.run(["modal", "volume", "put", "sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
 
         # Step 4: Delete local JPG folder and contents
-        print(f"Deleting local folder: {local_folder}")
         shutil.rmtree(local_folder)
 
 
@@ -370,7 +366,6 @@ class SegmentationController:
             progress_dialog.close()
             self.view.show_segmentation(video_segments, axis_str_suffix)
             self.view.update_mesh_view(video_segments, axis_str_suffix)
-            print("segmenting image completed.")
         
         seg_thread = threading.Thread(target=run_segmentation)
         seg_thread.start()
