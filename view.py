@@ -231,6 +231,13 @@ class MainView(tk.Tk):
             dim = 2 if axis == 0 else 1 if axis == 1 else 0
             max_slice = sizes[dim] - 1
 
+            # initialise show/hide mask and show/hide points vars before slider.set
+            show_mask_var=tk.BooleanVar()
+            canvas.show_mask_var = show_mask_var
+
+            show_points_var=tk.BooleanVar(value=True) 
+            canvas.show_points_var = show_points_var
+
             # Slider to navigate slices
             slider = ttk.Scale(
                 control_frame, 
@@ -244,10 +251,7 @@ class MainView(tk.Tk):
             initial_slice = max_slice // 2
             slider.set(initial_slice)
 
-            # checkbox to show/hide segmentation mask
-            show_mask_var=tk.BooleanVar()
-            canvas.show_mask_var = show_mask_var
-            # when checkbox is clicked, show_mask_var is auto updated
+            # checkbox to show/hide segmentation mask, show_mask_var is auto updated on click
             show_mask_checkbox = tk.Checkbutton(
                 control_frame,
                 text="Show Segmentation Mask",
@@ -265,9 +269,7 @@ class MainView(tk.Tk):
 
             canvas.show_mask_checkbox = show_mask_checkbox
 
-            # check box to show/hide points
-            show_points_var=tk.BooleanVar(value=True) 
-            canvas.show_points_var = show_points_var
+            # checkbox to show/hide points
             show_points_checkbox = tk.Checkbutton(
                 control_frame,
                 text="Show Points",
@@ -275,11 +277,11 @@ class MainView(tk.Tk):
                 command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text)
             )
             show_points_checkbox.pack(side="top", fill="x", pady=5)
-            #initially disable the checkbox because there are no points to show yet
+            # initially disable the checkbox because there are no points to show yet
             show_points_checkbox.config(state="disabled")
             canvas.show_points_checkbox = show_points_checkbox
             
-            # Initialize the slice display
+            # initialize the slice display
             self._update_slice(ax, canvas, axis, initial_slice, text)
 
             canvas.slider = slider
