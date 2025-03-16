@@ -170,7 +170,7 @@ def segment(slices, points, frame_idx, foldername):
     """
     segmentation functionality.
     """
-    print(app.name)
+    # print(app.name)
     with modal.enable_output():
         with app.run():
             video_segments=do_some_magic.remote(points, frame_idx, foldername)
@@ -189,5 +189,5 @@ def segment(slices, points, frame_idx, foldername):
     #     for out_obj_id, out_mask in video_segments[out_frame_idx].items():
     #         show_mask(out_mask, plt.gca(), obj_id=out_obj_id)
     # plt.show()
-    print("finished in handler, returning to controller")
+    # print("finished in handler, returning to controller")
     return video_segments
