@@ -71,9 +71,9 @@ def do_some_magic(points, frame_idx, foldername):
 
     # subprocess.call(['gcc', '--version'])
     # subprocess.call(['which', 'gcc'])
-    subprocess.call([sys.executable, '-m', 'pip', 'install', '--no-build-isolation', "-e", "."])
+    subprocess.call([sys.executable, '-m', 'pip', 'install', '--prefer-binary', '--no-build-isolation', "-e", ".[demo]"])
     # subprocess.call(['gcc', '--version'])
-    subprocess.call([sys.executable, '-m', 'pip', 'install', '-e', ".[demo]"])
+    # subprocess.call([sys.executable, '-m', 'pip', 'install', '--prefer-binary', '-e', ".[demo]"])
     # subprocess.call(['gcc', '--version'])
 
     # TODO: get line above to work. find a way of running notebook code (with it's import statements)
