@@ -2,8 +2,132 @@ import sys
 import shutil
 import os
 import subprocess
+import re
+import contextlib
+import threading
+import queue
+import time
+
+import tkinter as tk
+from tkinter import ttk
 
 from dicom_to_nifti import DicomToNifti
+
+class StdoutCapture:
+    def __init__(self, original_stdout, progress_queue):
+        self.original_stdout = original_stdout
+        self.progress_queue = progress_queue
+        self.buffer = ""
+    
+    def write(self, text):
+        self.original_stdout.write(text)
+        self.original_stdout.flush()
+        self.buffer += text
+        if "\n" in text:
+            lines = self.buffer.split("\n")
+            for line in lines[:-1]:
+                self.process_line(line)
+            self.buffer = lines[-1]
+    
+    def process_line(self, line):
+        # look for "frame loading" messages
+        m = re.search(r"frame loading \(JPEG\):\s*(\d+)%", line)
+        if m:
+            percent = int(m.group(1))
+            self.progress_queue.put(("Loading frames", percent))
+        # look for "propagate in video" messages
+        m2 = re.search(r"propagate in video:\s*(\d+)%", line)
+        if m2:
+            percent = int(m2.group(1))
+            self.progress_queue.put(("Propagating segmentation", percent))
+        # use successfully installed dependencies as a signal that container is ready
+        if "Successfully installed" in line:
+            self.progress_queue.put(("Preparing container", 100))
+    
+    def flush(self):
+        self.original_stdout.flush()
+
+class ProgressDialog:
+    def __init__(self, master):
+        self.top = tk.Toplevel(master)
+        self.top.title("Progress")
+        self.top.geometry("300x250")
+        self.top.grab_set() # make progress dialog modal
+
+        self.prep_label = tk.Label(self.top, text="Preparing container: 0%")
+        self.prep_label.pack(padx=10, pady=5)
+        self.prep_progress = ttk.Progressbar(self.top, length=300, mode="determinate", maximum=100)
+        self.prep_progress.pack(padx=10, pady=5)
+
+        self.load_label = tk.Label(self.top, text="Loading frames: 0%")
+        self.load_label.pack(padx=10, pady=5)
+        self.load_progress = ttk.Progressbar(self.top, orient="horizontal", length=300,
+                                                mode="determinate", maximum=100)
+        self.load_progress.pack(padx=10, pady=5)
+
+        self.prop_label = tk.Label(self.top, text="Propagating segmentation: 0%")
+        self.prop_label.pack(padx=10, pady=5)
+        self.prop_progress = ttk.Progressbar(self.top, orient="horizontal", length=300,
+                                                mode="determinate", maximum=100)
+        self.prop_progress.pack(padx=10, pady=5)
+
+        # create a queue to receive progress updates
+        self.progress_queue = queue.Queue()
+
+        # for container prep ETA: 360 seconds => 99%
+        self.prep_start_time = time.time()
+        
+        self.current_progress = {
+            "Preparing container": 0,
+            "Loading frames": 0,
+            "Propagating segmentation": 0
+        }
+    
+    def update_progress(self):
+        elapsed = time.time() - self.prep_start_time
+        if self.current_progress["Preparing container"] < 100:
+            computed = min(99, (elapsed / 360) * 99)
+            self.current_progress["Preparing container"] = max(self.current_progress["Preparing container"], computed)
+            self.prep_progress["value"] = self.current_progress["Preparing container"]
+            self.prep_label.config(text=f"Preparing container: {int(self.current_progress['Preparing container'])}%")
+
+        try:
+            while True:
+                stage, value = self.progress_queue.get_nowait()
+                if stage == "Preparing container":
+                    self.current_progress["Preparing container"] = 100
+                    self.prep_progress["value"] = 100
+                    self.prep_label.config(text=f"Preparing container: 100%")
+                elif stage == "Loading frames":
+                    self.current_progress["Loading frames"] = value
+                    self.load_progress["value"] = value
+                    self.load_label.config(text=f"Loading frames: {value}%")
+                    # if loading frames has started and prepping is not at 100%, force it
+                    if value > 0 and self.current_progress["Preparing container"] < 100:
+                        self.current_progress["Preparing container"] = 100
+                        self.prep_progress["value"] = 100
+                        self.prep_label.config(text="Preparing container: 100%")
+                elif stage == "Propagating segmentation":
+                    self.current_progress["Propagating segmentation"] = value
+                    self.prop_progress["value"] = value
+                    self.prop_label.config(text=f"Propagating segmentation: {value}%")
+                    # if propagation has started and loading frames is not at 100%, force it
+                    if value > 0 and self.current_progress["Loading frames"] < 100:
+                        self.current_progress["Loading frames"] = 100
+                        self.load_progress["value"] = 100
+                        self.load_label.config(text="Preparing container: 100%")
+                elif stage == "done":
+                    pass
+        except queue.Empty:
+            pass
+
+        # Continue polling every 100ms until the window is destroyed.
+        if self.top.winfo_exists():
+            self.top.after(100, self.update_progress)
+        
+    def close(self):
+        self.top.destroy()
+
 
 class SegmentationController:
     """
@@ -189,7 +313,6 @@ class SegmentationController:
             self.view.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
     def segment_image(self, slices, points, frame_idx, axis_str_suffix):
-        import modal_handler
         """
         Calls the model to segment the image based on the user's clicks.
         """
@@ -223,13 +346,31 @@ class SegmentationController:
         shutil.rmtree(local_folder)
 
 
+        self.run_segmentation_with_progress(slices, points, frame_idx, axis_str_suffix, foldername)
+    
+    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername):
+        import modal_handler
+        # create progress dialog as a child of the main view
+        progress_dialog = ProgressDialog(self.view)
+        progress_dialog.top.transient(self.view)
+        progress_dialog.update_progress() # start polling the progress queue
 
-
-
-        print(f"Calling modal_handler.segment with foldername: {foldername}")
-        video_segments=modal_handler.segment(slices, points, frame_idx, foldername)
-        print("0. inside controller")
-        self.view.show_segmentation(video_segments, axis_str_suffix)
-        self.view.update_mesh_view(video_segments, axis_str_suffix)
-        print("segmenting image completed.")
+        # runs in a separate thread
+        def run_segmentation():
+            capture = StdoutCapture(sys.stdout, progress_dialog.progress_queue)
+            # redirect stdout to capture progress messages
+            with contextlib.redirect_stdout(capture):
+                video_segments = modal_handler.segment(slices, points, frame_idx, foldername)
+                # signal completion
+                progress_dialog.progress_queue.put(("done", 100))
+            # once segmentation finished, update the view on the main thread
+            self.view.after(0, lambda: finish_segmentation(video_segments))
+    
+        def finish_segmentation(video_segments):
+            progress_dialog.close()
+            self.view.show_segmentation(video_segments, axis_str_suffix)
+            self.view.update_mesh_view(video_segments, axis_str_suffix)
+            print("segmenting image completed.")
         
+        seg_thread = threading.Thread(target=run_segmentation)
+        seg_thread.start()
