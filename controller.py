@@ -13,6 +13,8 @@ from tkinter import ttk
 
 from dicom_to_nifti import DicomToNifti
 
+CONTAINER_PREP_ETA = 210
+
 class StdoutCapture:
     def __init__(self, original_stdout, progress_queue):
         self.original_stdout = original_stdout
@@ -74,7 +76,7 @@ class ProgressDialog:
         # create a queue to receive progress updates
         self.progress_queue = queue.Queue()
 
-        # for container prep ETA: 360 seconds => 99%
+        # container prep ETA reached => 99%. final 1% when dependencies are successfully installed
         self.prep_start_time = time.time()
         
         self.current_progress = {
@@ -86,7 +88,7 @@ class ProgressDialog:
     def update_progress(self):
         elapsed = time.time() - self.prep_start_time
         if self.current_progress["Preparing container"] < 100:
-            computed = min(99, (elapsed / 360) * 99)
+            computed = min(99, (elapsed / CONTAINER_PREP_ETA) * 99)
             self.current_progress["Preparing container"] = max(self.current_progress["Preparing container"], computed)
             self.prep_progress["value"] = self.current_progress["Preparing container"]
             self.prep_label.config(text=f"Preparing container: {int(self.current_progress['Preparing container'])}%")
