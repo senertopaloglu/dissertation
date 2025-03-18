@@ -661,6 +661,43 @@ class MainView(tk.Tk):
         ax.set_title("3D Mesh View")
         self.mesh_view.canvas.draw()
 
+    def show_uncertainty(self, results, axis_str_suffix):
+        """
+        Overlay an uncertainty heatmap on the corresponding Axes based on MC dropout results.
+        The 'results' dict is expected to contain a key "mc_results" mapping object IDs to a dict
+        with keys "mean" and "uncertainty".
+        """
+        import numpy as np
+
+        # Determine which canvas/axis to update.
+        if axis_str_suffix.upper() == "AXIAL":
+            canvas = self.axial_view.canvas
+        elif axis_str_suffix.upper() == "CORONAL":
+            canvas = self.coronal_view.canvas
+        elif axis_str_suffix.upper() == "SAGITTAL":
+            canvas = self.sagittal_view.canvas
+        else:
+            return
+
+        ax = canvas.figure.axes[0]
+        first = True
+        # Iterate over each object (if multiple MC dropout results exist) and overlay the uncertainty map.
+        mc_results = results.get("mc_results", {})
+        for obj_id, res in mc_results.items():
+            uncertainty_map = res.get("uncertainty")
+            if uncertainty_map is None:
+                continue
+            # Normalize uncertainty map for visualization.
+            norm_uncertainty = (uncertainty_map - np.min(uncertainty_map)) / (np.ptp(uncertainty_map) + 1e-8)
+            norm_uncertainty = np.squeeze(norm_uncertainty)
+            # Overlay the heatmap with a "hot" colormap and some transparency.
+            im = ax.imshow(norm_uncertainty, cmap='winter', alpha=0.4)
+            
+            if first:
+                canvas.figure.colorbar(im, ax=ax, orientation='vertical')
+                first = False
+        canvas.draw()
+
     def _on_close(self):
         """
         Called when the user closes the window via the title bar or otherwise.

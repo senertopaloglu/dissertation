@@ -57,6 +57,8 @@ def show_points(coords, labels, ax, marker_size=200):
 @app.function(gpu="L4", image=image, volumes={"/root/temp":vol}, timeout=1000, mounts=[])
 def do_some_magic(points, frame_idx, foldername):
     import subprocess
+    import torch.nn as nn
+    import numpy as np
 
     # output = subprocess.check_output(["nvidia-smi"], text=True)
     # print(output)
@@ -114,6 +116,13 @@ def do_some_magic(points, frame_idx, foldername):
 
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
 
+    def enable_dropout(model):
+        for m in model.modules():
+            if isinstance(m, (nn.Dropout, nn.Dropout2d, nn.Dropout3d)):
+                m.train()
+
+    enable_dropout(predictor)
+
     # print("*********************")
     # print(os.getcwd())
 
@@ -147,10 +156,9 @@ def do_some_magic(points, frame_idx, foldername):
 
 
     video_segments = {}  # video_segments contains the per-frame segmentation results
-
-    prompts = {}  # hold all the clicks we add for visualization
-
+    mc_results = {}
     ann_frame_idx = frame_idx  # the frame index we interact with TODO: set = frame_idx (parameter)
+    n_samples = 10
 
     for k,v in points.items():
         ann_obj_id = k
@@ -158,24 +166,22 @@ def do_some_magic(points, frame_idx, foldername):
         labels = [x[2] for x in v]
         points = np.array(points, dtype=np.float32)
         labels = np.array(labels, np.int32)
-        prompts[ann_obj_id] = points, labels
-        _, out_obj_ids, out_mask_logits = predictor.add_new_points(
-            inference_state=inference_state,
-            frame_idx=ann_frame_idx,
-            obj_id=ann_obj_id,
-            points=points,
-            labels=labels,
-        )
-
-        # show the results on the current (interacted) frame
-        plt.figure(figsize=(12, 8))
-        plt.title(f"frame {ann_frame_idx}")
-        plt.imshow(Image.open(os.path.join(video_dir, frame_names[ann_frame_idx])))
-        show_points(points, labels, plt.gca())
-        for i, out_obj_id in enumerate(out_obj_ids):    
-            show_points(*prompts[out_obj_id], plt.gca())
-            show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_id)
-
+        sample_masks=[]
+        for sample in range(n_samples):
+            _, out_obj_ids, out_mask_logits = predictor.add_new_points(
+                inference_state=inference_state,
+                frame_idx=ann_frame_idx,
+                obj_id=ann_obj_id,
+                points=points,
+                labels=labels,
+            )
+            sample_mask = (out_mask_logits[0] > 0.0).cpu().numpy().astype(np.float32)
+            sample_masks.append(sample_mask)
+        sample_masks = np.stack(sample_masks, axis=0)
+        # compute the mean mask and per-pixel variance
+        mean_mask = (np.mean(sample_masks, axis=0) > 0.5).astype(np.uint8)
+        uncertainty_map = np.var(sample_masks, axis=0)
+        mc_results[ann_obj_id] = {"mean": mean_mask, "uncertainty": uncertainty_map}
     
     # run propagation throughout the video and collect the results in a dict
     # prop forwards
@@ -191,7 +197,7 @@ def do_some_magic(points, frame_idx, foldername):
             for i, out_obj_id in enumerate(out_obj_ids)
         }
     
-    return video_segments
+    return {"video_segments": video_segments, "mc_results": mc_results}
 
 def segment(slices, points, frame_idx, foldername):
     """
@@ -200,21 +206,6 @@ def segment(slices, points, frame_idx, foldername):
     # print(app.name)
     with modal.enable_output():
         with app.run():
-            video_segments=do_some_magic.remote(points, frame_idx, foldername)
-    # video_dir = f"./{foldername}"
-    # vis_frame_stride = 15
-    # frame_names = [
-    #     p for p in os.listdir(video_dir)
-    #     if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
-    # ]
-    # frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
-    # plt.close("all")
-    # for out_frame_idx in range(0, len(frame_names), vis_frame_stride):
-    #     plt.figure(figsize=(6, 4))
-    #     plt.title(f"frame {out_frame_idx}")
-    #     plt.imshow(Image.open(os.path.join(video_dir, frame_names[out_frame_idx])))
-    #     for out_obj_id, out_mask in video_segments[out_frame_idx].items():
-    #         show_mask(out_mask, plt.gca(), obj_id=out_obj_id)
-    # plt.show()
-    # print("finished in handler, returning to controller")
-    return video_segments
+            result=do_some_magic.remote(points, frame_idx, foldername)
+
+    return result

@@ -356,15 +356,17 @@ class SegmentationController:
             capture = StdoutCapture(sys.stdout, progress_dialog.progress_queue)
             # redirect stdout to capture progress messages
             with contextlib.redirect_stdout(capture):
-                video_segments = modal_handler.segment(slices, points, frame_idx, foldername)
+                results = modal_handler.segment(slices, points, frame_idx, foldername)
                 # signal completion
                 progress_dialog.progress_queue.put(("done", 100))
             # once segmentation finished, update the view on the main thread
-            self.view.after(0, lambda: finish_segmentation(video_segments))
+            self.view.after(0, lambda: finish_segmentation(results))
     
-        def finish_segmentation(video_segments):
+        def finish_segmentation(results):
             progress_dialog.close()
+            video_segments = results["video_segments"]
             self.view.show_segmentation(video_segments, axis_str_suffix)
+            self.view.show_uncertainty(results, axis_str_suffix)
             self.view.update_mesh_view(video_segments, axis_str_suffix)
         
         seg_thread = threading.Thread(target=run_segmentation)
