@@ -196,7 +196,8 @@ class SegmentationController:
         if current_tab.pos_click_checkbox["state"] == "disabled":
             current_tab.pos_click_checkbox["state"] = "normal"
         
-        # Add to points list
+        # record the point in the current view
+        # note: interpretation of (x,y) depends on which view (tab) is active
         current_tab.points.append((x, y, color, pos_flag))
         # Clear the redo stack if a new point is added
         current_tab.redo_stack.clear()
@@ -312,32 +313,124 @@ class SegmentationController:
         if hasattr(self.view, "sagittal_view") and hasattr(self.view.sagittal_view.canvas, "show_points_checkbox"):
             self.view.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
+    def convert_point_to_axial(self, point, slider_value, active_index):
+        """
+        HELPER METHOD
+        Convert a point (x, y, color, pos_flag) from the current view to axial coordinates.
+        
+        For:
+          - Axial view (active_index==0): point is (x, y) and slider_value is the axial slice (z).
+          - Coronal view (active_index==1): the displayed image is (x, z) with fixed y=slider_value.
+              → The corresponding axial 3D coordinate is (x, y_fixed, z); on the axial slice,
+                the point appears as (x, y_fixed) and the target axial slice index is taken from z.
+          - Sagittal view (active_index==2): the displayed image is (y, z) with fixed x=slider_value.
+              → The corresponding axial 3D coordinate is (x_fixed, y, z); on the axial slice,
+                the point appears as (y) in the second coordinate and the target axial slice index is z.
+        """
+        if active_index == 0:
+            # axial view: no conversion needed
+            return (point[0], point[1]), slider_value
+        elif active_index == 1:
+            # Coronal view: point = (x, z); slider_value gives y.
+            return (point[0], slider_value), int(point[1])
+        elif active_index == 2:
+            # Sagittal view: point = (y, z); slider_value gives x.
+            return (slider_value, point[0]), int(point[1])
+        else:
+            raise ValueError("Invalid active index.")
+    
+    def reproject_segmentation(self, axial_video_segments, target_axis):
+        """
+        HELPER METHOD
+        Convert a full axial segmentation (a dict mapping axial slice index to per-object masks)
+        into a segmentation dictionary for the target view.
+        
+        target_axis:
+            0 → axial (return as is),
+            1 → coronal (slicing along y),
+            2 → sagittal (slicing along x).
+        """
+        import numpy as np
+        # Reconstruct the 3D volume from axial segmentation.
+        z_indices = sorted(axial_video_segments.keys())
+        first_mask = np.squeeze(next(iter(axial_video_segments[z_indices[0]].values())))
+        x_dim, y_dim = first_mask.shape  # axial mask shape: (x, y)
+        z_dim = len(z_indices)
+        combined = {}
+        for obj_id in axial_video_segments[z_indices[0]].keys():
+            volume = np.zeros((z_dim, x_dim, y_dim), dtype=int)
+            for i, z in enumerate(z_indices):
+                volume[i, :, :] = np.squeeze(axial_video_segments[z][obj_id])
+            combined[obj_id] = volume
+
+        reprojected = {}
+        if target_axis == 1:
+            # Coronal view: fixed y coordinate; each slice is obtained by taking volume[:, :, y].
+            for y in range(y_dim):
+                slice_dict = {}
+                for obj_id, vol in combined.items():
+                    mask_slice = vol[:, :, y]  # shape: (z, x)
+                    if y == 0:
+                        print("[DEBUG] mask_slice shape before any transpose/rotation:", mask_slice.shape)
+                    # Transpose to match the (x, z) orientation used in the coronal view.
+                    #mask_slice = np.transpose(mask_slice)
+                    if y == 0:
+                        print("[DEBUG] mask_slice shape after transpose:", mask_slice.shape)
+                    #mask_slice = np.rot90(mask_slice, k=-1) # rotate 90 deg clockwise, once
+                    if y == 0:
+                        print("[DEBUG] mask_slice shape after transpose and rot90:", mask_slice.shape)
+                    slice_dict[obj_id] = mask_slice
+                reprojected[y] = slice_dict
+        elif target_axis == 2:
+            # Sagittal view: fixed x coordinate; each slice is volume[:, x, :].
+            for x in range(x_dim):
+                slice_dict = {}
+                for obj_id, vol in combined.items():
+                    mask_slice = vol[:, x, :]  # shape: (z, y)
+                    mask_slice = np.transpose(mask_slice)  # to (y, z) orientation
+                    mask_slice = np.rot90(mask_slice, k=1)
+                    mask_slice = np.fliplr(mask_slice)
+                    slice_dict[obj_id] = mask_slice
+                reprojected[x] = slice_dict
+        else:
+            # For axial view, no reprojecting is needed.
+            return axial_video_segments
+
+        return reprojected
+    
     def segment_image(self, slices, points, frame_idx, axis_str_suffix):
         """
         Calls the model to segment the image based on the user's clicks.
+
+        Instead of directly segmenting using the current view’s slice,
+        we convert all user-selected points into axial coordinates and always use the axial slice.
+        Later, if the active view is not axial, we reproject the full segmentation volume.
         """
-        # get filename (without prefix and file format)
-        foldername = f"{self.model.filename.split('.')[0].split('/')[-1]}_{axis_str_suffix}_JPG"
-        local_folder = f"./temp/{foldername}"
+        active_index = self.view.tabControl.index("current")
+        current_tab = self.view.tabs[active_index]
+        if not current_tab.points:
+            print("No slice selected for segmentation.")
+            return
 
-        # Step 0: Delete local folder if it exists
-        if os.path.exists(local_folder):
-            shutil.rmtree(local_folder)
+        # Get the slider value (which is interpreted differently per view).
+        if active_index == 0:
+            slider_value = int(self.view.axial_view.canvas.slider.get())
+        elif active_index == 1:
+            slider_value = int(self.view.coronal_view.canvas.slider.get())
+        elif active_index == 2:
+            slider_value = int(self.view.sagittal_view.canvas.slider.get())
+        else:
+            raise ValueError("Invalid active view index.")
+        
+        # Convert all points from the current view into axial coordinates.
+        axial_points = []
+        for pt in current_tab.points:
+            axial_pt, axial_z = self.convert_point_to_axial(pt, slider_value, active_index)
+            axial_points.append((axial_pt, axial_z, pt[2], pt[3]))
+        # Use the axial slice index from the most recent click.
+        target_axial_slice = axial_points[-1][1]
 
-        # Step 1: Convert NIfTI to JPG and create local folder
-        # sys.executable will auto select the running Python interpreter (supports cross-platform)
-        subprocess.run([sys.executable, "nifti_to_jpg.py", self.model.filename, local_folder, "--axis", axis_str_suffix.lower()], check=True)
-
-        # Step 2: Delete folder in modal
-        # do not check=True because no graceful handling if folder not exists in modal volume
-        subprocess.run(["modal", "volume", "rm", "-r", "sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
-
-        # Step 3: Create folder and transfer files to modal
-        subprocess.run(["modal", "volume", "put", "sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
-
-        # Step 4: Delete local JPG folder and contents
-        shutil.rmtree(local_folder)
-
+        # Build points_grouped (using your color_map convention) with the converted axial points.
         points_grouped = {}
         color_map = {
             "red": 1,
@@ -351,20 +444,41 @@ class SegmentationController:
             "black": 9,
             "gray": 10
         }
-        active_index = self.view.tabControl.index("current")
-        current_tab = self.view.tabs[active_index]
-        for idx, entry in enumerate(current_tab.points_listbox.get(0,'end')):
-            pos_flag = 1 if "Positive click" in entry else 0
-            x, y = entry.split(' at ')[-1].strip('()').split(',')
-            color = current_tab.points_listbox.itemcget(idx, "fg")
+        for pt in axial_points:
+            click, _, color, pos_flag = pt
             k = color_map.get(color.lower(), 1)
             if k not in points_grouped:
                 points_grouped[k] = []
-            points_grouped[k].append((int(x), int(y), int(pos_flag)))
+            points_grouped[k].append((int(click[0]), int(click[1]), int(pos_flag)))
         
-        self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername)
+        # Always use the axial slice for segmentation.
+        axial_slices = self.view._slice_request_callback(0, target_axial_slice)
+        
+        # get filename (without prefix and file format)
+        foldername = f"{self.model.filename.split('.')[0].split('/')[-1]}_{axis_str_suffix}_JPG"
+        local_folder = f"./temp/{foldername}"
+
+        # Step 0: Delete local folder if it exists
+        if os.path.exists(local_folder):
+            shutil.rmtree(local_folder)
+
+        # Step 1: Convert NIfTI to JPG and create local folder
+        # sys.executable will auto select the running Python interpreter (supports cross-platform)
+        subprocess.run([sys.executable, "nifti_to_jpg.py", self.model.filename, local_folder, "--axis", "axial"], check=True)
+
+        # Step 2: Delete folder in modal
+        # do not check=True because no graceful handling if folder not exists in modal volume
+        subprocess.run(["modal", "volume", "rm", "-r", "sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
+
+        # Step 3: Create folder and transfer files to modal
+        subprocess.run(["modal", "volume", "put", "sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
+
+        # Step 4: Delete local JPG folder and contents
+        shutil.rmtree(local_folder)
+        
+        self.run_segmentation_with_progress(axial_slices, points_grouped, target_axial_slice, "AXIAL", foldername, active_index)
     
-    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername):
+    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, active_index):
         import modal_handler
         # create progress dialog as a child of the main view
         progress_dialog = ProgressDialog(self.view)
@@ -384,8 +498,19 @@ class SegmentationController:
     
         def finish_segmentation(video_segments):
             progress_dialog.close()
-            self.view.show_segmentation(video_segments, axis_str_suffix)
-            self.view.update_mesh_view(video_segments, axis_str_suffix)
+            
+            # If the active view is non-axial, reproject the axial segmentation.
+            if active_index == 0:
+                self.view.show_segmentation(video_segments, "AXIAL")
+                self.view.update_mesh_view(video_segments, "AXIAL")
+            elif active_index == 1:
+                reprojected = self.reproject_segmentation(video_segments, target_axis=1)
+                self.view.show_segmentation(reprojected, "CORONAL")
+                self.view.update_mesh_view(reprojected, "CORONAL")
+            elif active_index == 2:
+                reprojected = self.reproject_segmentation(video_segments, target_axis=2)
+                self.view.show_segmentation(reprojected, "SAGITTAL")
+                self.view.update_mesh_view(reprojected, "SAGITTAL")
         
         seg_thread = threading.Thread(target=run_segmentation)
         seg_thread.start()

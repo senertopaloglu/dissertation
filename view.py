@@ -338,6 +338,7 @@ class MainView(tk.Tk):
         
         slice_index = int(float(val))
         slice_array = self._slice_request_callback(axis, slice_index)
+        print(f"[DEBUG] Coronal slice_array.shape = {slice_array.shape}")  # <-- Add this
         ax.clear()
         ax.imshow(slice_array, cmap='gray')
         ax.set_title(f"{text} - Slice {slice_index}")
@@ -348,6 +349,7 @@ class MainView(tk.Tk):
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
             if axis==1:
                 for out_obj_id, out_mask in self.coronal_view_mask[slice_index].items():
+                    print(f"[DEBUG] coronal_view_mask[{slice_index}][{out_obj_id}].shape = {out_mask.shape}")  # <-- Add this
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
             if axis==2:
                 for out_obj_id, out_mask in self.sagittal_view_mask[slice_index].items():
@@ -623,9 +625,13 @@ class MainView(tk.Tk):
         z_dim = len(video_segments) # Number of frames
         first_frame_object_ids = list(video_segments[0].keys())
 
-        shape = video_segments[0][first_frame_object_ids[0]].shape # Shape of the mask
-        x_dim = shape[1]
-        y_dim = shape[2]
+        mask_shape = video_segments[0][first_frame_object_ids[0]].shape # Shape of the mask
+        if len(mask_shape) == 2:
+            x_dim, y_dim = mask_shape
+        elif len(mask_shape) == 3:
+            x_dim, y_dim = mask_shape[1], mask_shape[2]
+        else:
+            raise ValueError("Unexpected mask shape encountered.")
         combined_meshes = {obj_id : np.zeros((z_dim, x_dim, y_dim), dtype=int) for obj_id in first_frame_object_ids}
 
         # Populate the 3D array with the segmentation masks and image data
