@@ -115,7 +115,7 @@ class ProgressDialog:
                     if value > 0 and self.current_progress["Loading frames"] < 100:
                         self.current_progress["Loading frames"] = 100
                         self.load_progress["value"] = 100
-                        self.load_label.config(text="Preparing container: 100%")
+                        self.load_label.config(text="Loading frames: 100%")
                 elif stage == "done":
                     pass
         except queue.Empty:
@@ -320,9 +320,6 @@ class SegmentationController:
         foldername = f"{self.model.filename.split('.')[0].split('/')[-1]}_{axis_str_suffix}_JPG"
         local_folder = f"./temp/{foldername}"
 
-
-
-
         # Step 0: Delete local folder if it exists
         if os.path.exists(local_folder):
             shutil.rmtree(local_folder)
@@ -341,8 +338,31 @@ class SegmentationController:
         # Step 4: Delete local JPG folder and contents
         shutil.rmtree(local_folder)
 
-
-        self.run_segmentation_with_progress(slices, points, frame_idx, axis_str_suffix, foldername)
+        points_grouped = {}
+        color_map = {
+            "red": 1,
+            "blue": 2,
+            "green": 3,
+            "orange": 4,
+            "purple": 5,
+            "cyan": 6,
+            "magenta": 7,
+            "yellow": 8,
+            "black": 9,
+            "gray": 10
+        }
+        active_index = self.view.tabControl.index("current")
+        current_tab = self.view.tabs[active_index]
+        for idx, entry in enumerate(current_tab.points_listbox.get(0,'end')):
+            pos_flag = 1 if "Positive click" in entry else 0
+            x, y = entry.split(' at ')[-1].strip('()').split(',')
+            color = current_tab.points_listbox.itemcget(idx, "fg")
+            k = color_map.get(color.lower(), 1)
+            if k not in points_grouped:
+                points_grouped[k] = []
+            points_grouped[k].append((int(x), int(y), int(pos_flag)))
+        
+        self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername)
     
     def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername):
         import modal_handler
