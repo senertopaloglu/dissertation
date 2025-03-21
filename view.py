@@ -13,6 +13,7 @@ import scipy.ndimage as ndimage
 import numpy as np
 from skimage import measure
 from mpl_toolkits.mplot3d import Axes3D 
+import matplotlib.colors as mcolors
 
 class MainView(tk.Tk):
     """
@@ -24,6 +25,21 @@ class MainView(tk.Tk):
 
         self.model = model
         self.controller = controller
+
+        # map pointer ID (1-10) to color names
+        self.pointer_color_mapping = {
+            1: "red",
+            2: "blue",
+            3: "green",
+            4: "orange",
+            5: "purple",
+            6: "cyan",
+            7: "magenta",
+            8: "teal",
+            9: "black",
+            10: "gray"
+        }
+
 
         # Keep references to callback functions
         self._on_click_callback = None
@@ -109,14 +125,15 @@ class MainView(tk.Tk):
             pos_click_checkbox.pack(pady=(5,2))
             tab.pos_click_checkbox = pos_click_checkbox
 
-            tab.pointer_color_optionmenu = tk.OptionMenu(tab, tab.pointer_color_var, "Red", "Blue", "Green")
+            colors = ["Red", "Blue", "Green", "Orange", "Purple", "Cyan", "Magenta", "Teal", "Black", "Gray"]
+
+            tab.pointer_color_optionmenu = tk.OptionMenu(tab, tab.pointer_color_var, *colors)
             tab.pointer_color_optionmenu.pack(fill="x")
 
             # Access the underlying menu and configure each item's text color
             menu = tab.pointer_color_optionmenu["menu"]
-            menu.entryconfig(0, foreground="red")
-            menu.entryconfig(1, foreground="blue")
-            menu.entryconfig(2, foreground="green")
+            for i, color in enumerate(colors):
+                menu.entryconfig(i, foreground=color.lower())
 
             # Define a callback to update the OptionMenu button color.
             def update_option_menu_color(*args, current_tab=tab):
@@ -192,9 +209,13 @@ class MainView(tk.Tk):
         if random_color:
             color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
         else:
-            cmap = plt.get_cmap("tab10")
-            cmap_idx = 0 if obj_id is None else obj_id
-            color = np.array([*cmap(cmap_idx)[:3], 0.6])
+            if obj_id is not None and obj_id in self.pointer_color_mapping:
+                base_color = self.pointer_color_mapping[obj_id]
+                color = np.array([*mcolors.to_rgb(base_color), 0.6])
+            else:
+                cmap = plt.get_cmap("tab10")
+                cmap_idx = 0 if obj_id is None else obj_id
+                color = np.array([*cmap(cmap_idx)[:3], 0.6])
         h, w = mask.shape[-2:]
         mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
         ax.imshow(mask_image)
@@ -550,8 +571,7 @@ class MainView(tk.Tk):
         # We can glean the current figure from plt.gcf(), but typically you'd keep references.
         if ax is None:
             ax = plt.gca()
-        mpl_color = {'red': 'r', 'green': 'g', 'blue': 'b'}.get(color.lower(), 'r')
-        return ax.plot(x, y, mpl_color + 'o')[0]
+        return ax.plot(x, y, marker='o', color=color.lower())[0]
 
     def draw_canvas(self, ax_idx=None):
         """
@@ -607,8 +627,6 @@ class MainView(tk.Tk):
         x_dim = shape[1]
         y_dim = shape[2]
         combined_meshes = {obj_id : np.zeros((z_dim, x_dim, y_dim), dtype=int) for obj_id in first_frame_object_ids}
-        
-        #combined_mesh = np.zeros((z_dim, x_dim, y_dim), dtype=int)
 
         # Populate the 3D array with the segmentation masks and image data
         for z, frame_data in video_segments.items():
@@ -623,18 +641,14 @@ class MainView(tk.Tk):
         fig.clf()  # Clear current figure
         ax = fig.add_subplot(111, projection='3d')
 
-        cmap = plt.get_cmap('tab10')
-
         downsample_factor = 0.85 # Downsample factor for faster rendering
 
         for obj_id, combined_mesh in combined_meshes.items():
             downsampled = ndimage.zoom(combined_mesh, zoom=downsample_factor, order=0)
             verts, faces, _, _ = measure.marching_cubes(downsampled, level=0.5) # faster, optimised version of measure.marching_cubes
             verts = verts / downsample_factor  # Rescale to original dimensions
-            color = cmap(obj_id % 10)
-            ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], color=color, alpha=0.7)
-
-        #ax.plot_trisurf(verts_non_segmented[:, 0], verts_non_segmented[:, 1], faces_non_segmented, verts_non_segmented[:, 2], color='grey', alpha=0.3)
+            base_color = self.pointer_color_mapping.get(obj_id, "red")
+            ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], color=base_color, alpha=0.7)
         
         # Customize the plot (optional)
         ax.set_xlabel('X')
