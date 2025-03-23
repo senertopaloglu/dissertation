@@ -455,7 +455,18 @@ class SegmentationController:
             messagebox.showerror("Error", "Please select at least one point on the image for segmentation.")
             return
         
-        color_mapping = {'red':1, 'green':2, 'blue':3}
+        color_mapping = {
+            "red": 1,
+            "blue": 2,
+            "green": 3,
+            "orange": 4,
+            "purple": 5,
+            "cyan": 6,
+            "magenta": 7,
+            "yellow": 8,
+            "black": 9,
+            "gray": 10
+        }
         seeds = {}
         for (x, y, color, *_) in tab.points:
             obj_id = color_mapping.get(color.lower(), 1)
@@ -469,7 +480,7 @@ class SegmentationController:
         plt.title(f"seed points")
         plt.imshow(original_image)
         for obj_id, pts in seeds.items():
-            mpl_color = {1:"r", 2:"g", 3:"b"}.get(obj_id, "r")
+            mpl_color = {1:"r", 2:"b", 3:"g", 4:"orange", 5:"purple", 6:"c", 7:"m", 8:"y", 9:"k", 10:"gray"}.get(obj_id, "r")
             xs = [int(p[0]*scale_x) for p in pts]
             ys = [int(p[1]*scale_y) for p in pts]
             plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
@@ -564,9 +575,9 @@ class SegmentationController:
                     
                     fig, ax = plt.subplots(figsize=(6,6))
                     ax.imshow(original_image, cmap='gray')
-                    cmap = plt.get_cmap('tab10')
+                    cmap_mpl = plt.get_cmap('tab10')
                     for obj_id, mask in upsampled_masks.items():
-                        color = np.array([*cmap(obj_id)[:3], 0.4])
+                        color = np.array([*cmap_mpl(obj_id % 10)[:3], 0.4])
                         h, w = mask.shape[-2:]
                         mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
                         ax.imshow(mask_image, alpha=0.4)
@@ -580,25 +591,35 @@ class SegmentationController:
                     def next_iteration():
                         # Extract new seeds from the downsampled mask.
                         new_seeds = {}
-                        for obj_id, seg_mask_down in video_segments[slice_idx].items():
-                            if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
-                                seg_mask_down = seg_mask_down[0]
-                            mask_uint8 = (seg_mask_down > 0).astype(np.uint8) * 255
-                            contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                            if contours:
-                                contour = max(contours, key=cv2.contourArea)
-                                # use centroid of the largest segmentation mask
-                                M = cv2.moments(contour)
-                                if M["m00"] != 0:
-                                    cx = int(M["m10"] / M["m00"])
-                                    cy = int(M["m01"] / M["m00"])
-                                    new_seeds[obj_id] = [(cx, cy, 1)]
+                        for obj_id in seeds.keys():
+                            seg_mask_down = video_segments[slice_idx].get(obj_id)
+                            if seg_mask_down is not None:
+                                if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
+                                    seg_mask_down = seg_mask_down[0]
+                                mask_uint8 = (seg_mask_down > 0).astype(np.uint8) * 255
+                                contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                                if contours:
+                                    contour = max(contours, key=cv2.contourArea)
+                                    # use centroid of the largest segmentation mask
+                                    M = cv2.moments(contour)
+                                    if M["m00"] != 0:
+                                        cx = int(M["m10"] / M["m00"])
+                                        cy = int(M["m01"] / M["m00"])
+                                        new_seeds[obj_id] = [(cx, cy, 1)]
+                                    else:
+                                        new_seeds[obj_id] = seeds[obj_id]
+                                else:
+                                    # if no contours found then use the original seed
+                                    new_seeds[obj_id] = seeds[obj_id]
+                            else:
+                                # if segmentation mask is not returned then use the original seed
+                                new_seeds[obj_id] = seeds[obj_id]
 
                         plt.figure(figsize=(12, 8))
                         plt.title(f"New Seed Points")
                         plt.imshow(original_image)
                         for obj_id, pts in new_seeds.items():
-                            mpl_color = {1:"r", 2:"g", 3:"b"}.get(obj_id, "r")
+                            mpl_color = {1:"r",2:"b",3:"g",4:"orange",5:"purple",6:"c",7:"m",8:"y",9:"k",10:"gray"}.get(obj_id, "r")
                             xs = [int(p[0]*(original_w/resolution)) for p in pts]
                             ys = [int(p[1]*(original_h/resolution)) for p in pts]
                             plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
@@ -610,7 +631,7 @@ class SegmentationController:
                                 widget.destroy()
                             fig2, ax2 = plt.subplots(figsize=(4,4))
                             for obj_id, mask in upsampled_masks.items():
-                                color = np.array([*cmap(obj_id)[:3], 0.4])
+                                color = np.array([*cmap_mpl(obj_id % 10)[:3], 0.4])
                                 h, w = mask.shape[-2:]
                                 mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
                                 ax2.imshow(mask_image, alpha=0.4)
