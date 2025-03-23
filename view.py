@@ -185,7 +185,7 @@ class MainView(tk.Tk):
             # automated multiresolution segmentation button
             tab.btn_auto_seg = ttk.Button(
                 tab,
-                text="Automated multiresolution segmentation",
+                text="Apply Multiresolution Segmentation",
                 command=lambda t=tab: self.controller.multiresolution_segmentation(t)
             )
             tab.btn_auto_seg.pack(fill="x", pady=5)
