@@ -8,6 +8,8 @@ import threading
 import queue
 import time
 
+import matplotlib.colors as mcolors
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -322,7 +324,7 @@ class SegmentationController:
         if hasattr(self.view, "sagittal_view") and hasattr(self.view.sagittal_view.canvas, "show_points_checkbox"):
             self.view.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
-    def segment_image(self, slices, points, frame_idx, axis_str_suffix, custom_filename=None, completion_callback=None, downsampled=False):
+    def segment_image(self, slices, points, frame_idx, axis_str_suffix, custom_filename=None, completion_callback=None, downsampled=False, multi_resolution=False, is_first=False, is_final=False):
         """
         Calls the model to segment the image based on the user's clicks.
         """
@@ -381,9 +383,9 @@ class SegmentationController:
                 points_grouped[k] = []
             points_grouped[k].append((int(x), int(y), int(pos_flag)))
         
-        self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback)
+        self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback, multi_resolution, is_first, is_final)
     
-    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None):
+    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None, multi_resolution=False, is_first=False, is_final=False):
         import modal_handler
         # create progress dialog as a child of the main view
         progress_dialog = ProgressDialog(self.view)
@@ -395,7 +397,7 @@ class SegmentationController:
             capture = StdoutCapture(sys.stdout, progress_dialog.progress_queue)
             # redirect stdout to capture progress messages
             with contextlib.redirect_stdout(capture):
-                video_segments = modal_handler.segment(slices, points, frame_idx, foldername)
+                video_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final)
                 # signal completion
                 progress_dialog.progress_queue.put(("done", 100))
             # once segmentation finished, update the view on the main thread
@@ -412,7 +414,7 @@ class SegmentationController:
         seg_thread = threading.Thread(target=run_segmentation)
         seg_thread.start()
     
-    # automated multiresolution segmentation routine
+    # multiresolution segmentation routine
     def multiresolution_segmentation(self, tab):
         if self.model.image is None:
             messagebox.showerror("Error", "No image loaded.")
@@ -446,9 +448,6 @@ class SegmentationController:
             messagebox.showerror("Downsampling Error", "Image is too small to downsample to 64x64.")
             return
 
-        popup = tk.Toplevel(self.view)
-        popup.title("Automated Multiresolution Segmentation")
-
         current_res = start_res
 
         if not hasattr(tab, "points") or not tab.points:
@@ -468,23 +467,11 @@ class SegmentationController:
             "gray": 10
         }
         seeds = {}
-        for (x, y, color, *_) in tab.points:
+        for (x, y, color, pos_flag) in tab.points:
             obj_id = color_mapping.get(color.lower(), 1)
             temp_scale_x = int(x * current_res / original_w)
             temp_scale_y = int(y * current_res / original_h)
-            seeds.setdefault(obj_id, []).append((temp_scale_x, temp_scale_y, 1))
-        
-        scale_x = original_w / current_res
-        scale_y = original_h / current_res
-        plt.figure(figsize=(12, 8))
-        plt.title(f"seed points")
-        plt.imshow(original_image)
-        for obj_id, pts in seeds.items():
-            mpl_color = {1:"r", 2:"b", 3:"g", 4:"orange", 5:"purple", 6:"c", 7:"m", 8:"y", 9:"k", 10:"gray"}.get(obj_id, "r")
-            xs = [int(p[0]*scale_x) for p in pts]
-            ys = [int(p[1]*scale_y) for p in pts]
-            plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
-        plt.show()
+            seeds.setdefault(obj_id, []).append((temp_scale_x, temp_scale_y, pos_flag))
 
         # helper: downsample the entire volume for the selected view
         def downsample_volume(res):
@@ -515,10 +502,17 @@ class SegmentationController:
                     return s
             return original
 
+        most_recent_video_segments = None
+
         # This inner function performs one iteration.
         def iteration(resolution, seeds):
             if resolution > max(original_h, original_w):
-                messagebox.showerror("Downsampling Error", f"Cannot downsample to {resolution}x{resolution}.")
+                def show_final():
+                    nonlocal most_recent_video_segments
+                    if most_recent_video_segments:
+                        self.view.show_segmentation(most_recent_video_segments, axis_str_suffix)
+                        self.view.update_mesh_view(most_recent_video_segments, axis_str_suffix)
+                self.view.after(100, show_final)
                 return
             
             downsampled_volume = downsample_volume(resolution)
@@ -540,6 +534,8 @@ class SegmentationController:
             
             # Call segment_image on the downsampled volume.
             # Save the downsampled image temporarily as a NIfTI file.
+            is_first = start_res == resolution
+            is_final = resolution == min(original_h, original_w)
             self.segment_image(
                 downsampled_volume,
                 points,
@@ -547,12 +543,18 @@ class SegmentationController:
                 axis_str_suffix=axis_str_suffix,
                 custom_filename=temp_filename,
                 completion_callback=completion_callback,
-                downsampled=True
+                downsampled=True,
+                multi_resolution=True,
+                is_first=is_first,
+                is_final=is_final
             )
 
             def check_result():
+                nonlocal most_recent_video_segments
                 if 'video_segments' in result_container:
                     video_segments = result_container['video_segments']
+                    print(f"resolution: {resolution}")
+                    most_recent_video_segments = result_container['video_segments']
                     
                     os.remove(f"./temp/{temp_filename}_{axis_str_suffix}.nii")
                     
@@ -560,6 +562,7 @@ class SegmentationController:
                         messagebox.showerror("Error", f"No segmentation found for slice {slice_idx}.")
                         return
                     
+                    nonlocal upsampled_masks
                     upsampled_masks = {}
 
                     for obj_id, seg_mask_down in video_segments[slice_idx].items():
@@ -569,90 +572,54 @@ class SegmentationController:
                             seg_mask_down = seg_mask_down.astype(np.uint8)
                         upsampled_masks[obj_id] = cv2.resize(seg_mask_down, (original_w, original_h), interpolation=cv2.INTER_NEAREST)
 
-                    # clear popup and show result
-                    for widget in popup.winfo_children():
-                        widget.destroy()
-                    
-                    fig, ax = plt.subplots(figsize=(6,6))
-                    ax.imshow(original_image, cmap='gray')
-                    cmap_mpl = plt.get_cmap('tab10')
-                    for obj_id, mask in upsampled_masks.items():
-                        color = np.array([*cmap_mpl(obj_id % 10)[:3], 0.4])
-                        h, w = mask.shape[-2:]
-                        mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-                        ax.imshow(mask_image, alpha=0.4)
-                    ax.set_title(f"Segmentation result (input downsampled to {resolution}x{resolution})")
-                    ax.axis('off') # disables the axis lines, tick marks, and labels
-
-                    canvas = FigureCanvasTkAgg(fig, master=popup)
-                    canvas.get_tk_widget().pack(fill='both', expand=True)
-                    canvas.draw()
-
-                    def next_iteration():
-                        # Extract new seeds from the downsampled mask.
-                        new_seeds = {}
-                        for obj_id in seeds.keys():
-                            seg_mask_down = video_segments[slice_idx].get(obj_id)
-                            if seg_mask_down is not None:
-                                if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
-                                    seg_mask_down = seg_mask_down[0]
-                                mask_uint8 = (seg_mask_down > 0).astype(np.uint8) * 255
-                                contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                                if contours:
-                                    contour = max(contours, key=cv2.contourArea)
-                                    # use centroid of the largest segmentation mask
-                                    M = cv2.moments(contour)
-                                    if M["m00"] != 0:
-                                        cx = int(M["m10"] / M["m00"])
-                                        cy = int(M["m01"] / M["m00"])
-                                        new_seeds[obj_id] = [(cx, cy, 1)]
-                                    else:
-                                        new_seeds[obj_id] = seeds[obj_id]
+                    # auto compute new seeds for each object
+                    new_seeds = {}
+                    for obj_id in seeds.keys():
+                        seg_mask_down = video_segments[slice_idx].get(obj_id)
+                        if seg_mask_down is not None:
+                            if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
+                                seg_mask_down = seg_mask_down[0]
+                            mask_uint8 = (seg_mask_down > 0).astype(np.uint8) * 255
+                            contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                            if contours:
+                                contour = max(contours, key=cv2.contourArea)
+                                # use centroid of the largest segmentation mask
+                                M = cv2.moments(contour)
+                                if M["m00"] != 0:
+                                    cx = int(M["m10"] / M["m00"])
+                                    cy = int(M["m01"] / M["m00"])
+                                    new_seeds[obj_id] = [(cx, cy, 1)]
                                 else:
-                                    # if no contours found then use the original seed
                                     new_seeds[obj_id] = seeds[obj_id]
                             else:
-                                # if segmentation mask is not returned then use the original seed
+                                # if no contours found then use the original seed
                                 new_seeds[obj_id] = seeds[obj_id]
-
-                        plt.figure(figsize=(12, 8))
-                        plt.title(f"New Seed Points")
-                        plt.imshow(original_image)
-                        for obj_id, pts in new_seeds.items():
-                            mpl_color = {1:"r",2:"b",3:"g",4:"orange",5:"purple",6:"c",7:"m",8:"y",9:"k",10:"gray"}.get(obj_id, "r")
-                            xs = [int(p[0]*(original_w/resolution)) for p in pts]
-                            ys = [int(p[1]*(original_h/resolution)) for p in pts]
-                            plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
-                        plt.show()
-
-                        new_res = resolution * 2
-                        if new_res > max(original_h, original_w):
-                            for widget in popup.winfo_children():
-                                widget.destroy()
-                            fig2, ax2 = plt.subplots(figsize=(4,4))
-                            for obj_id, mask in upsampled_masks.items():
-                                color = np.array([*cmap_mpl(obj_id % 10)[:3], 0.4])
-                                h, w = mask.shape[-2:]
-                                mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-                                ax2.imshow(mask_image, alpha=0.4)
-                            ax2.set_title("Final Segmentation")
-                            canvas2 = FigureCanvasTkAgg(fig2, master=popup)
-                            canvas2.get_tk_widget().pack()
-                            canvas2.draw()
-                            apply_btn = ttk.Button(popup, text="Apply Segmentation",
-                                                command=lambda: self.apply_segmentation_to_frame(upsampled_masks, tab))
-                            apply_btn.pack(pady=5)
                         else:
-                            iteration(new_res, new_seeds)
-                    next_btn = ttk.Button(popup, text="Next", command=next_iteration)
-                    next_btn.pack(pady=5)
+                            # if segmentation mask is not returned then use the original seed
+                            new_seeds[obj_id] = seeds[obj_id]
+                    
+                    # for debugging: display new seed in temorary popup figure
+                    # plt.figure(figsize=(12, 8))
+                    # plt.title(f"New Seed Points")
+                    # plt.imshow(original_image)
+                    # for obj_id, pts in new_seeds.items():
+                    #     mpl_color = {1:"r",2:"b",3:"g",4:"orange",5:"purple",6:"c",7:"m",8:"y",9:"k",10:"gray"}.get(obj_id, "r")
+                    #     xs = [int(p[0]*(original_w/resolution)) for p in pts]
+                    #     ys = [int(p[1]*(original_h/resolution)) for p in pts]
+                    #     plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
+                    # plt.close() 
+
+                    new_res = resolution * 2
+                    iteration(new_res, new_seeds)
                 else:
-                    popup.after(100, check_result)
+                    self.view.after(100, check_result)
             
             check_result()
-            
-        # start the first iteration
+        
+        # initialise variable to hold upsampled masks from last iteration
+        upsampled_masks = {}
         iteration(current_res, seeds)
+
     
     # NEW: Apply final segmentation mask to the respective frame.
     def apply_segmentation_to_frame(self, mask, tab):
