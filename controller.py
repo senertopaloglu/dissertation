@@ -8,8 +8,8 @@ import threading
 import queue
 import time
 
-import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import * # colors and styles
 
 from dicom_to_nifti import DicomToNifti
 
@@ -49,23 +49,23 @@ class StdoutCapture:
 
 class ProgressDialog:
     def __init__(self, master):
-        self.top = tk.Toplevel(master)
+        self.top = ttk.Toplevel(master)
         self.top.title("Progress")
         self.top.geometry("300x250")
         self.top.grab_set() # make progress dialog modal
 
-        self.prep_label = tk.Label(self.top, text="Preparing container: 0%")
+        self.prep_label = ttk.Label(self.top, text="Preparing container: 0%")
         self.prep_label.pack(padx=10, pady=5)
         self.prep_progress = ttk.Progressbar(self.top, length=300, mode="determinate", maximum=100)
         self.prep_progress.pack(padx=10, pady=5)
 
-        self.load_label = tk.Label(self.top, text="Loading frames: 0%")
+        self.load_label = ttk.Label(self.top, text="Loading frames: 0%")
         self.load_label.pack(padx=10, pady=5)
         self.load_progress = ttk.Progressbar(self.top, orient="horizontal", length=300,
                                                 mode="determinate", maximum=100)
         self.load_progress.pack(padx=10, pady=5)
 
-        self.prop_label = tk.Label(self.top, text="Propagating segmentation: 0%")
+        self.prop_label = ttk.Label(self.top, text="Propagating segmentation: 0%")
         self.prop_label.pack(padx=10, pady=5)
         self.prop_progress = ttk.Progressbar(self.top, orient="horizontal", length=300,
                                                 mode="determinate", maximum=100)
@@ -97,7 +97,7 @@ class ProgressDialog:
                 if stage == "Preparing container":
                     self.current_progress["Preparing container"] = 100
                     self.prep_progress["value"] = 100
-                    self.prep_label.config(text=f"Preparing container: 100%")
+                    self.prep_label.config(text="Preparing container: 100%")
                 elif stage == "Loading frames":
                     self.current_progress["Loading frames"] = value
                     self.load_progress["value"] = value
