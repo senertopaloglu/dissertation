@@ -39,7 +39,7 @@ class MainView(Window):
             5: "purple",
             6: "cyan",
             7: "magenta",
-            8: "yellow",
+            8: "teal",
             9: "black",
             10: "gray"
         }
@@ -160,7 +160,7 @@ class MainView(Window):
             tab.pos_click_checkbox = pos_click_checkbox
 
             colors = ["Red", "Blue", "Green", "Orange", "Purple",
-                      "Cyan", "Magenta", "Yellow", "Black", "Gray"]
+                      "Cyan", "Magenta", "Teal", "Black", "Gray"]
 
             tab.pointer_color_optionmenu = OptionMenu(content_frame, tab.pointer_color_var, "")
             tab.pointer_color_optionmenu.pack(fill="x")

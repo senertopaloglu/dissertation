@@ -347,7 +347,7 @@ class SegmentationController:
             "purple": 5,
             "cyan": 6,
             "magenta": 7,
-            "yellow": 8,
+            "teal": 8,
             "black": 9,
             "gray": 10
         }
