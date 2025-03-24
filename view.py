@@ -15,6 +15,11 @@ from skimage import measure
 from mpl_toolkits.mplot3d import Axes3D 
 import matplotlib.colors as mcolors
 
+try:
+    import nibabel as nib
+except ImportError:
+    nib = None
+
 class MainView(tk.Tk):
     """
     The View in our MVC. Responsible for building and displaying the GUI.
@@ -78,7 +83,7 @@ class MainView(tk.Tk):
         btn_import = ttk.Button(self.sidebar, text="Import Image", command=self._import_image)
         btn_import.pack(fill="x", pady=5)
 
-        btn_export = ttk.Button(self.sidebar, text="Export Image")
+        btn_export = ttk.Button(self.sidebar, text="Export 3D Mesh Model", command=self._export_3d_mesh)
         btn_export.pack(fill="x", pady=5)
 
         tabControl = ttk.Notebook(self.sidebar)
@@ -181,6 +186,9 @@ class MainView(tk.Tk):
 
             tab.btn_segment = ttk.Button(tab, text="Segment Image", command=self._segment_image)
             tab.btn_segment.pack(fill="x", pady=5)
+
+            tab.btn_export_view = ttk.Button(tab, text="Export View with Segmentation Mask", command=self._export_view_with_mask)
+            tab.btn_export_view.pack(fill="x", pady=2)
 
     def _build_image_frames(self):
         """
@@ -422,8 +430,8 @@ class MainView(tk.Tk):
             pos_flag = 1 if "Positive click" in entry else 0
             x, y = entry.split(' at ')[-1].strip('()').split(',')
             color = current_tab.points_listbox.itemcget(idx, "fg")
-            k = 1 if color == "red" else 2 if color == "green" else 3
-            points[k].append((int(x), int(y), int(pos_flag)))
+            obj_id = self.pointer_color_mapping.get(color, 1)
+            points[obj_id].append((int(x), int(y), int(pos_flag)))
 
         self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix)
     
@@ -662,6 +670,190 @@ class MainView(tk.Tk):
         if hasattr(self.mesh_view, "label"):
             new_text = f"{axis_str_suffix.title()} Segmentation Result (3D Mesh View)"
             self.mesh_view.label.config(text=new_text)
+        
+        # store the segmentation result for later exporting
+        self.last_video_segments = video_segments
+    
+    def _export_3d_mesh(self):
+        """
+        Exports the 3D mesh currently displayed in the mesh view as an STL file.
+        The method uses the latest segmentation (stored in self.last_video_segments)
+        to recompute the mesh using marching cubes and then exports it.
+        """
+        try:
+            from stl import mesh
+        except ImportError:
+            tk.messagebox.showerror("Export Error", "The 'numpy-stl' package is required for exporting 3D meshes.")
+            return
+    
+        # ensure segmentation has been run, else, 3d segmentation mesh will not exist
+        if not hasattr(self, "last_video_segments"):
+            tk.messagebox.showerror("Error", "No segmentation available to export.")
+            return
+
+        video_segments = self.last_video_segments
+
+        # Assume all frames have the same dimensions and combine them per object.
+        z_dim = len(video_segments)
+        first_frame_object_ids = list(video_segments[0].keys())
+        shape = video_segments[0][first_frame_object_ids[0]].shape  # (1, H, W) or (H, W)
+        x_dim = shape[1]
+        y_dim = shape[2]
+        combined_meshes = {obj_id: np.zeros((z_dim, x_dim, y_dim), dtype=int) for obj_id in first_frame_object_ids}
+
+        for z, frame_data in video_segments.items():
+            for obj_id, mask in frame_data.items():
+                # remove any extra dimensions if needed
+                combined_meshes[obj_id][z, :, :] = np.squeeze(mask)
+        
+        stl_meshes = []
+        for obj_id, combined_mesh in combined_meshes.items():
+            try:
+                verts, faces, _, _ = measure.marching_cubes(combined_mesh, level=0.5)
+            except Exception as e:
+                continue
+        
+            # convert faces into triangles using the vertices
+            triangles = verts[faces] # shape: (n_faces, 3, 3)
+            m = mesh.Mesh(np.zeros(triangles.shape[0], dtype=mesh.Mesh.dtype))
+            for i, triangle in enumerate(triangles):
+                m.vectors[i] = triangle
+            stl_meshes.append(m)
+        
+        if not stl_meshes:
+            tk.messagebox.showerror("Export Error", "No valid mesh could be generated.")
+            return
+    
+        # combine all mesh data into one STL
+        combined_data = np.concatenate([m.data for m in stl_meshes])
+        exported_mesh = mesh.Mesh(combined_data.copy())
+
+        export_filename = tk.filedialog.asksaveasfilename(
+            title="Export 3D Mesh as STL",
+            filetypes=[("STL files", "*.stl"), ("All files", "*.*")],
+            defaultextension=".stl"
+        )
+        if not export_filename:
+            return
+        
+        exported_mesh.save(export_filename)
+        tk.messagebox.showinfo("Export Successful", f"3D mesh exported as '{export_filename}'.")
+
+    def _export_view_with_mask(self):
+        """
+        Exports the original image with overlayed segmentation mask in the active view
+        as a 3D NIfTI file.
+        """
+        alpha = 0.4
+
+        active_index = self.tabControl.index("current")
+
+        sizes = self.model.image.GetLargestPossibleRegion().GetSize()
+        dim = 2 if active_index == 0 else 1 if active_index == 1 else 0
+        max_slice = sizes[dim] - 1
+
+        if active_index == 0:
+            if self.axial_view_mask is None:
+                tk.messagebox.showerror("Export Error", "No segmentation mask available for axial view.")
+                return
+            original_np = np.asarray(self.model.image)
+            mask_dict = self.axial_view_mask
+        elif active_index == 1:
+            if self.coronal_view_mask is None:
+                tk.messagebox.showerror("Export Error", "No segmentation mask available for coronal view.")
+                return
+            original_np = np.asarray(self.model.image)  # Expect shape (Z, H, W)
+            mask_dict = self.coronal_view_mask
+        elif active_index == 2:
+            # Sagittal view: slices along axis 2
+            if self.sagittal_view_mask is None:
+                tk.messagebox.showerror("Export Error", "No segmentation mask available for Sagittal view.")
+                return
+            original_np = np.asarray(self.model.image)  # Expect shape (Z, H, W)
+            mask_dict = self.sagittal_view_mask
+        else:
+            tk.messagebox.showerror("Export Error", "Invalid view selected.")
+            return
+
+        composite_slices = []
+        for i in range(max_slice + 1):
+            # get the correct original slice for the orientation.
+            orig_slice = self._slice_request_callback(active_index, i)
+
+            if active_index == 2:
+                orig_slice = np.rot90(orig_slice, k=-1)
+                orig_slice = np.fliplr(orig_slice)
+
+            slice_min, slice_max = orig_slice.min(), orig_slice.max()
+            if slice_max > slice_min:  # to avoid divide-by-zero
+                norm_slice = (orig_slice - slice_min) / (slice_max - slice_min)
+            else:
+                norm_slice = orig_slice * 0  # all zeros if it's a uniform slice
+            
+            norm_slice_255 = (norm_slice * 255).astype(np.uint8)
+
+            # convert grayscale to RGB
+            rgb = np.stack([norm_slice_255] * 3, axis=-1).astype(np.float32)
+            composite = rgb.copy()
+
+            # if a segmentation mask exists for this slice, overlay each object. 
+            if i in mask_dict:
+                for obj_id, mask in mask_dict[i].items():
+                    
+                    if active_index == 2:
+                        mask = np.squeeze(mask.astype(np.float32))
+                        mask = np.rot90(mask, k=-1)
+                        mask = np.fliplr(mask)
+                        mask_expanded = mask[..., np.newaxis] # expand *exactly one* axis for alpha blending
+                    else:
+                        mask_expanded = np.expand_dims(mask.astype(np.float32), axis=-1)
+
+                    # Get pointer color for this object, default to red if missing.
+                    color_name = self.pointer_color_mapping.get(obj_id, "red")
+                    rgb_color = np.array(mcolors.to_rgb(color_name)) * 255
+                    # Prepare an overlay of the pointer color.
+                    overlay = np.zeros_like(composite)
+                    overlay[:, :, 0] = rgb_color[0]
+                    overlay[:, :, 1] = rgb_color[1]
+                    overlay[:, :, 2] = rgb_color[2]
+                    # Alpha blend the overlay where mask is True.
+                    composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
+                composite = np.clip(composite, 0, 255)
+            
+            if composite.ndim == 4 and composite.shape[0] == 1:
+                composite = np.squeeze(composite, axis=0)
+            
+            composite_slices.append(composite.astype(np.uint8))
+        
+        composite_volume = np.stack(composite_slices, axis=0)  # shape: (num_slices, H, W, 3)
+
+        # Sometimes an extra singleton dimension appears as axis 1; if so, squeeze it:
+        if composite_volume.ndim == 5 and composite_volume.shape[1] == 1:
+            composite_volume = np.squeeze(composite_volume, axis=1)
+        
+        # reorient volume
+        if active_index == 1: # coronal
+            composite_volume = composite_volume.transpose(1, 0, 2, 3)
+        if active_index == 2: # sagittal
+            composite_volume = composite_volume.transpose(2, 1, 0, 3)
+
+        if nib is None:
+            tk.messagebox.showerror("Export Error", "The 'nibabel' package is required for exporting 3D NIfTI files.")
+            return
+
+        # Open file dialog for user to choose save location.
+        export_filename = tk.filedialog.asksaveasfilename(
+            title="Export 3D Image with Segmentation Overlay as NIfTI",
+            defaultextension=".nii",
+            filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")]
+        )
+        if not export_filename:
+            return
+
+        # Create a NIfTI image and save
+        nii_img = nib.Nifti1Image(composite_volume, affine=np.eye(4))
+        nib.save(nii_img, export_filename)
+        tk.messagebox.showinfo("Export Successful", f"Image with segmentation overlay exported as:\n{export_filename}")
 
     def clear_mesh_view(self):
         """
