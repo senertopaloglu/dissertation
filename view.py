@@ -821,10 +821,6 @@ class MainView(Window):
 
         active_index = self.tabControl.index("current")
 
-        sizes = self.model.image.GetLargestPossibleRegion().GetSize()
-        dim = 2 if active_index == 0 else 1 if active_index == 1 else 0
-        max_slice = sizes[dim] - 1
-
         if active_index == 0:
             if self.axial_view_mask is None:
                 tk.messagebox.showerror("Export Error", "No segmentation mask available for axial view.")
@@ -847,6 +843,10 @@ class MainView(Window):
         else:
             tk.messagebox.showerror("Export Error", "Invalid view selected.")
             return
+        
+        sizes = self.model.image.GetLargestPossibleRegion().GetSize()
+        dim = 2 if active_index == 0 else 1 if active_index == 1 else 0
+        max_slice = sizes[dim] - 1
 
         composite_slices = []
         for i in range(max_slice + 1):
