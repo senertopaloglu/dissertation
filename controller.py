@@ -374,13 +374,16 @@ class SegmentationController:
         # runs in a separate thread
         def run_segmentation():
             capture = StdoutCapture(sys.stdout, progress_dialog.progress_queue)
-            # redirect stdout to capture progress messages
-            with contextlib.redirect_stdout(capture):
-                video_segments = modal_handler.segment(slices, points, frame_idx, foldername)
-                # signal completion
-                progress_dialog.progress_queue.put(("done", 100))
-            # once segmentation finished, update the view on the main thread
-            self.view.after(0, lambda: finish_segmentation(video_segments))
+            try:
+                # redirect stdout to capture progress messages
+                with contextlib.redirect_stdout(capture):
+                    video_segments = modal_handler.segment(slices, points, frame_idx, foldername)
+                    # signal completion
+                    progress_dialog.progress_queue.put(("done", 100))
+                # once segmentation finished, update the view on the main thread
+                self.view.after(0, lambda: finish_segmentation(video_segments))
+            except Exception as e:
+                self.view.after(0, lambda: tk.messagebox.showerror("Segmentation Error", f"An exception occurred in the container:\n{e}"))
     
         def finish_segmentation(video_segments):
             progress_dialog.close()
