@@ -15,40 +15,66 @@ def nifti_to_jpg(nifti_path, output_folder, axis):
     data = (data / np.max(data)) * 255
     data = data.astype(np.uint8)
 
+    is_rgb = (data.ndim == 4 and data.shape[-1] == 3)
+
     # Create output directory if it doesn't exist
     os.makedirs(output_folder, exist_ok=True)
 
     axis_lower = axis.lower()
-    if axis_lower == 'axial':
-        slice_axis = 2
-    elif axis_lower == 'coronal':
-        slice_axis = 1
-    elif axis_lower == 'sagittal':
-        slice_axis = 0
+    if is_rgb:
+        # For a 4D RGB image with shape (Z, H, W, 3)
+        if axis_lower == 'axial':
+            slice_axis = 0
+        elif axis_lower == 'coronal':
+            slice_axis = 1
+        elif axis_lower == 'sagittal':
+            slice_axis = 2
+        else:
+            print(f"Axis '{axis}' not implemented. Defaulting to axial slices.")
+            slice_axis = 0
+            axis_lower = 'axial'
     else:
-        print(f"Axis '{axis}' not implemented. Defaulting to axial slices.")
-        slice_axis = 2
-        axis_lower = 'axial'
+        # For a 3D grayscale image with shape (H, W, Z)
+        if axis_lower == 'axial':
+            slice_axis = 2
+        elif axis_lower == 'coronal':
+            slice_axis = 1
+        elif axis_lower == 'sagittal':
+            slice_axis = 0
+        else:
+            print(f"Axis '{axis}' not implemented. Defaulting to axial slices.")
+            slice_axis = 2
+            axis_lower = 'axial'
 
     # Iterate through each slice
     for i in range(data.shape[slice_axis]):
-        if slice_axis == 0:
-            slice_img = data[i, :, :]
-            slice_img = np.rot90(slice_img, k=1)    # Rotate 90 degrees once, counter-clockwise
-            slice_img = np.flipud(slice_img)          # Flip vertically
-            slice_img = np.fliplr(slice_img) # flip horizontally
-        elif slice_axis == 1:
-            slice_img = data[:, i, :]
-            slice_img = np.rot90(slice_img, k=-1)  # Rotate 90 degrees once, clockwise
-        else:  # axial
-            slice_img = data[:, :, i]
-            slice_img = np.rot90(slice_img, k=1)  # Rotate 90 degrees once, clockwise
-            slice_img = np.fliplr(slice_img) # flip horizontally
+        if is_rgb:
+            # For RGB, extract slice based on the chosen axis
+            if axis_lower == 'axial':  # slice out along Z
+                slice_img = data[i, :, :, :]
+                # Optionally, adjust rotation/flipping if needed
+            elif axis_lower == 'coronal':  # slice from middle of H dimension
+                slice_img = data[:, i, :, :]
+            elif axis_lower == 'sagittal':  # slice from W dimension
+                slice_img = data[:, :, i, :]
+        else:
+            if slice_axis == 0:
+                slice_img = data[i, :, :]
+                slice_img = np.rot90(slice_img, k=1)    # Rotate 90 degrees once, counter-clockwise
+                slice_img = np.flipud(slice_img)          # Flip vertically
+                slice_img = np.fliplr(slice_img) # flip horizontally
+            elif slice_axis == 1:
+                slice_img = data[:, i, :]
+                slice_img = np.rot90(slice_img, k=-1)  # Rotate 90 degrees once, clockwise
+            else:  # axial
+                slice_img = data[:, :, i]
+                slice_img = np.rot90(slice_img, k=1)  # Rotate 90 degrees once, clockwise
+                slice_img = np.fliplr(slice_img) # flip horizontally
 
+        if is_rgb and slice_img.ndim == 4 and slice_img.shape[0] == 1:
+            # Remove only the first singleton dimension so that (1,H,W,3) becomes (H,W,3)
+            slice_img = np.squeeze(slice_img, axis=0)
         
-
-        
-
         img_pil = Image.fromarray(slice_img)
         img_pil.save(os.path.join(output_folder, f'{i:05d}.jpg'))
 
