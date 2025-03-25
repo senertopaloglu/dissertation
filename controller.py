@@ -322,7 +322,7 @@ class SegmentationController:
         if hasattr(self.view, "sagittal_view") and hasattr(self.view.sagittal_view.canvas, "show_points_checkbox"):
             self.view.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
-    def segment_image(self, slices, points, frame_idx, axis_str_suffix, custom_filename=None, completion_callback=None, downsampled=False):
+    def segment_image(self, slices, points, frame_idx, axis_str_suffix, custom_filename=None, completion_callback=None, downsampled=False, multires=False):
         """
         Calls the model to segment the image based on the user's clicks.
         """
@@ -381,9 +381,9 @@ class SegmentationController:
                 points_grouped[k] = []
             points_grouped[k].append((int(x), int(y), int(pos_flag)))
         
-        self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback)
+        self.run_segmentation_with_progress(np.asarray(self.model.image), points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback, multires)
     
-    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None):
+    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None, multires=False):
         import modal_handler
         # create progress dialog as a child of the main view
         progress_dialog = ProgressDialog(self.view)
@@ -395,7 +395,7 @@ class SegmentationController:
             capture = StdoutCapture(sys.stdout, progress_dialog.progress_queue)
             # redirect stdout to capture progress messages
             with contextlib.redirect_stdout(capture):
-                video_segments = modal_handler.segment(slices, points, frame_idx, foldername)
+                video_segments = modal_handler.segment(slices, points, frame_idx, foldername, axis_str_suffix, multires)
                 # signal completion
                 progress_dialog.progress_queue.put(("done", 100))
             # once segmentation finished, update the view on the main thread
@@ -403,11 +403,10 @@ class SegmentationController:
     
         def finish_segmentation(video_segments):
             progress_dialog.close()
-            if completion_callback:
-                completion_callback(video_segments)
-            else:
-                self.view.show_segmentation(video_segments, axis_str_suffix)
-                self.view.update_mesh_view(video_segments, axis_str_suffix)
+            self.view.show_segmentation(video_segments, axis_str_suffix)
+            self.view.update_mesh_view(video_segments, axis_str_suffix)
+            if multires:
+                self.apply_segmentation_to_frame(video_segments, axis_str_suffix)
         
         seg_thread = threading.Thread(target=run_segmentation)
         seg_thread.start()
@@ -418,258 +417,35 @@ class SegmentationController:
             messagebox.showerror("Error", "No image loaded.")
             return
 
-        full_image = np.asarray(self.model.image)
-
-        # get the original image as a numpy array
-        axis = self.view.tabs.index(tab)
-        if axis == 0:
-            slice_idx = int(self.view.axial_view.canvas.slider.get())
-            original_image = full_image[slice_idx, :, :]
-            original_h, original_w = original_image.shape
+        active_index = self.view.tabControl.index("current")
+        if active_index == 0:
+            frame_idx = int(self.view.axial_view.canvas.slider.get())
             axis_str_suffix = "AXIAL"
-        elif axis == 1:
-            slice_idx = int(self.view.coronal_view.canvas.slider.get())
-            original_image = full_image[:, slice_idx, :]
-            original_h, original_w = original_image.shape
+        elif active_index == 1:
+            frame_idx = int(self.view.coronal_view.canvas.slider.get())
             axis_str_suffix = "CORONAL"
-        elif axis == 2:
-            slice_idx = int(self.view.sagittal_view.canvas.slider.get())
-            original_image = full_image[:, :, slice_idx]
-            original_h, original_w = original_image.shape
+        elif active_index == 2:
+            frame_idx = int(self.view.sagittal_view.canvas.slider.get())
             axis_str_suffix = "SAGITTAL"
-        else:
-            messagebox.showerror("Error", "Invalid axis.")
-            return
 
-        start_res = 64
-        if original_h < start_res or original_w < start_res:
-            messagebox.showerror("Downsampling Error", "Image is too small to downsample to 64x64.")
-            return
-
-        popup = tk.Toplevel(self.view)
-        popup.title("Automated Multiresolution Segmentation")
-
-        current_res = start_res
-
-        if not hasattr(tab, "points") or not tab.points:
-            messagebox.showerror("Error", "Please select at least one point on the image for segmentation.")
-            return
-        
-        color_mapping = {
-            "red": 1,
-            "blue": 2,
-            "green": 3,
-            "orange": 4,
-            "purple": 5,
-            "cyan": 6,
-            "magenta": 7,
-            "yellow": 8,
-            "black": 9,
-            "gray": 10
-        }
-        seeds = {}
-        for (x, y, color, *_) in tab.points:
-            obj_id = color_mapping.get(color.lower(), 1)
-            temp_scale_x = int(x * current_res / original_w)
-            temp_scale_y = int(y * current_res / original_h)
-            seeds.setdefault(obj_id, []).append((temp_scale_x, temp_scale_y, 1))
-        
-        scale_x = original_w / current_res
-        scale_y = original_h / current_res
-        plt.figure(figsize=(12, 8))
-        plt.title(f"seed points")
-        plt.imshow(original_image)
-        for obj_id, pts in seeds.items():
-            mpl_color = {1:"r", 2:"b", 3:"g", 4:"orange", 5:"purple", 6:"c", 7:"m", 8:"y", 9:"k", 10:"gray"}.get(obj_id, "r")
-            xs = [int(p[0]*scale_x) for p in pts]
-            ys = [int(p[1]*scale_y) for p in pts]
-            plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
-        plt.show()
-
-        # helper: downsample the entire volume for the selected view
-        def downsample_volume(res):
-            if axis == 0:
-                N = full_image.shape[0]
-                vol = np.zeros((N, res, res), dtype=full_image.dtype)
-                for i in range(N):
-                    vol[i] = cv2.resize(full_image[i,:,:], (res,res), interpolation=cv2.INTER_AREA)
-                return vol
-            elif axis == 1:
-                H = full_image.shape[1]
-                vol = np.zeros((H, res, res), dtype=full_image.dtype)
-                for j in range(H):
-                    vol[j] = cv2.resize(full_image[:,j,:], (res,res), interpolation=cv2.INTER_AREA)
-                return vol
-            elif axis == 2:
-                W = full_image.shape[2]
-                vol = np.zeros((W, res, res), dtype=full_image.dtype)
-                for k in range(W):
-                    vol[k] = cv2.resize(full_image[:,:,k], (res, res), interpolation=cv2.INTER_AREA)
-                return vol
-
-        # helper: compute upsample size based on current resolution and original size
-        def upsample_target(current, original):
-            standards = [64,128,256,512,1024]
-            for s in standards:
-                if s > current and s <= original:
-                    return s
-            return original
-
-        # This inner function performs one iteration.
-        def iteration(resolution, seeds):
-            if resolution > max(original_h, original_w):
-                messagebox.showerror("Downsampling Error", f"Cannot downsample to {resolution}x{resolution}.")
-                return
-            
-            downsampled_volume = downsample_volume(resolution)
-            print("*", downsampled_volume.shape)
-            points = seeds
-
-            filename_without_extension = os.path.splitext(os.path.basename(self.model.filename))[0]
-
-            temp_filename = f"downsampled_{filename_without_extension}_{resolution}"
-            os.makedirs("./temp", exist_ok=True)
-            nii_img = nib.Nifti1Image(downsampled_volume, affine=np.eye(4))
-            print("**", nii_img.header.get_data_shape())
-            nib.save(nii_img, f"./temp/{temp_filename}_{axis_str_suffix}.nii")
-
-            # Completion callback to capture segmentation result.
-            result_container = {}
-            def completion_callback(video_segments):
-                result_container['video_segments'] = video_segments
-            
-            # Call segment_image on the downsampled volume.
-            # Save the downsampled image temporarily as a NIfTI file.
-            self.segment_image(
-                downsampled_volume,
-                points,
-                frame_idx=slice_idx,
-                axis_str_suffix=axis_str_suffix,
-                custom_filename=temp_filename,
-                completion_callback=completion_callback,
-                downsampled=True
-            )
-
-            def check_result():
-                if 'video_segments' in result_container:
-                    video_segments = result_container['video_segments']
-                    
-                    os.remove(f"./temp/{temp_filename}_{axis_str_suffix}.nii")
-                    
-                    if slice_idx not in video_segments:
-                        messagebox.showerror("Error", f"No segmentation found for slice {slice_idx}.")
-                        return
-                    
-                    upsampled_masks = {}
-
-                    for obj_id, seg_mask_down in video_segments[slice_idx].items():
-                        if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
-                            seg_mask_down = seg_mask_down[0]
-                        if seg_mask_down.dtype == np.bool_:
-                            seg_mask_down = seg_mask_down.astype(np.uint8)
-                        upsampled_masks[obj_id] = cv2.resize(seg_mask_down, (original_w, original_h), interpolation=cv2.INTER_NEAREST)
-
-                    # clear popup and show result
-                    for widget in popup.winfo_children():
-                        widget.destroy()
-                    
-                    fig, ax = plt.subplots(figsize=(6,6))
-                    ax.imshow(original_image, cmap='gray')
-                    cmap_mpl = plt.get_cmap('tab10')
-                    for obj_id, mask in upsampled_masks.items():
-                        color = np.array([*cmap_mpl(obj_id % 10)[:3], 0.4])
-                        h, w = mask.shape[-2:]
-                        mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-                        ax.imshow(mask_image, alpha=0.4)
-                    ax.set_title(f"Segmentation result (input downsampled to {resolution}x{resolution})")
-                    ax.axis('off') # disables the axis lines, tick marks, and labels
-
-                    canvas = FigureCanvasTkAgg(fig, master=popup)
-                    canvas.get_tk_widget().pack(fill='both', expand=True)
-                    canvas.draw()
-
-                    def next_iteration():
-                        # Extract new seeds from the downsampled mask.
-                        new_seeds = {}
-                        for obj_id in seeds.keys():
-                            seg_mask_down = video_segments[slice_idx].get(obj_id)
-                            if seg_mask_down is not None:
-                                if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
-                                    seg_mask_down = seg_mask_down[0]
-                                mask_uint8 = (seg_mask_down > 0).astype(np.uint8) * 255
-                                contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                                if contours:
-                                    contour = max(contours, key=cv2.contourArea)
-                                    # use centroid of the largest segmentation mask
-                                    M = cv2.moments(contour)
-                                    if M["m00"] != 0:
-                                        cx = int(M["m10"] / M["m00"])
-                                        cy = int(M["m01"] / M["m00"])
-                                        new_seeds[obj_id] = [(cx, cy, 1)]
-                                    else:
-                                        new_seeds[obj_id] = seeds[obj_id]
-                                else:
-                                    # if no contours found then use the original seed
-                                    new_seeds[obj_id] = seeds[obj_id]
-                            else:
-                                # if segmentation mask is not returned then use the original seed
-                                new_seeds[obj_id] = seeds[obj_id]
-
-                        plt.figure(figsize=(12, 8))
-                        plt.title(f"New Seed Points")
-                        plt.imshow(original_image)
-                        for obj_id, pts in new_seeds.items():
-                            mpl_color = {1:"r",2:"b",3:"g",4:"orange",5:"purple",6:"c",7:"m",8:"y",9:"k",10:"gray"}.get(obj_id, "r")
-                            xs = [int(p[0]*(original_w/resolution)) for p in pts]
-                            ys = [int(p[1]*(original_h/resolution)) for p in pts]
-                            plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
-                        plt.show()
-
-                        new_res = resolution * 2
-                        if new_res > max(original_h, original_w):
-                            for widget in popup.winfo_children():
-                                widget.destroy()
-                            fig2, ax2 = plt.subplots(figsize=(4,4))
-                            for obj_id, mask in upsampled_masks.items():
-                                color = np.array([*cmap_mpl(obj_id % 10)[:3], 0.4])
-                                h, w = mask.shape[-2:]
-                                mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-                                ax2.imshow(mask_image, alpha=0.4)
-                            ax2.set_title("Final Segmentation")
-                            canvas2 = FigureCanvasTkAgg(fig2, master=popup)
-                            canvas2.get_tk_widget().pack()
-                            canvas2.draw()
-                            apply_btn = ttk.Button(popup, text="Apply Segmentation",
-                                                command=lambda: self.apply_segmentation_to_frame(upsampled_masks, tab))
-                            apply_btn.pack(pady=5)
-                        else:
-                            iteration(new_res, new_seeds)
-                    next_btn = ttk.Button(popup, text="Next", command=next_iteration)
-                    next_btn.pack(pady=5)
-                else:
-                    popup.after(100, check_result)
-            
-            check_result()
-            
-        # start the first iteration
-        iteration(current_res, seeds)
+        self.segment_image(np.asarray(self.model.image), tab.points, frame_idx, axis_str_suffix, completion_callback=self.apply_segmentation_to_frame, downsampled=False, multires=True)
     
     # NEW: Apply final segmentation mask to the respective frame.
-    def apply_segmentation_to_frame(self, mask, tab):
-        active_index = self.view.tabs.index(tab)
-        if active_index == 0:
-            axis_str_suffix = "AXIAL"
+    def apply_segmentation_to_frame(self, mask, axis_str_suffix):
+        if axis_str_suffix.lower() == "axial":
             canvas = self.view.axial_view.canvas
-            self.view.axial_view_mask = {int(canvas.slider.get()): {1: mask}}
+            self.view.axial_view_mask = mask
             label = "Axial View"
-        elif active_index == 1:
-            axis_str_suffix = "CORONAL"
+            active_index = 0
+        elif axis_str_suffix.lower() == "coronal":
             canvas = self.view.coronal_view.canvas
-            self.view.coronal_view_mask = {int(canvas.slider.get()): {1: mask}}
+            self.view.coronal_view_mask = mask
             label = "Coronal View"
-        elif active_index == 2:
+            active_index = 1
+        elif axis_str_suffix.lower() == "sagittal":
             axis_str_suffix = "SAGITTAL"
             canvas = self.view.sagittal_view.canvas
-            self.view.sagittal_view_mask = {int(canvas.slider.get()): {1: mask}}
+            self.view.sagittal_view_mask = mask
             label = "Sagittal View"
+            active_index = 2
         self.view._update_slice(canvas.figure.axes[0], canvas, active_index, int(canvas.slider.get()), label)
