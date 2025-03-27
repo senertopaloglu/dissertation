@@ -84,13 +84,25 @@ def do_some_magic(points, frame_idx, foldername, multi_resolution, is_first, is_
 
         subprocess.call(['gcc', '--version'])
         subprocess.call(['which', 'gcc'])
-        subprocess.call([venv_python, '-m', 'pip', 'install', 'hydra-core'])
-        subprocess.call([venv_python, '-m', 'pip', 'install', '--no-build-isolation', "-e", "."])
-        subprocess.call(['gcc', '--version'])
-        subprocess.call([venv_python, '-m', 'pip', 'install', '-e', ".[demo]"])
+        
+        try:
+            subprocess.check_output([venv_python, '-m', 'pip', 'show', 'hydra-core'])
+        except subprocess.CalledProcessError as e:
+            subprocess.call([venv_python, '-m', 'pip', 'install', 'hydra-core'])
+
+        try:
+            subprocess.call([venv_python, '-m', 'pip', 'show', "."])
+        except subprocess.CalledProcessError as e:
+            subprocess.call([venv_python, '-m', 'pip', 'install', '--no-build-isolation', "-e", "."])
+        
         subprocess.call(['gcc', '--version'])
 
-    print(f"*******cwd:{os.getcwd()}*******")
+        try:
+            subprocess.call([venv_python, '-m', 'pip', 'show', ".[demo]"])
+        except subprocess.CalledProcessError as e:
+            subprocess.call([venv_python, '-m', 'pip', 'install', '-e', ".[demo]"])
+        
+        subprocess.call(['gcc', '--version'])
 
     # TODO: get line above to work. find a way of running notebook code (with it's import statements)
 
