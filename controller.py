@@ -506,12 +506,21 @@ class SegmentationController:
 
         # This inner function performs one iteration.
         def iteration(resolution, seeds):
-            if resolution > max(original_h, original_w):
+            print(resolution)
+            if (resolution * 2) > max(original_h, original_w):
                 def show_final():
                     nonlocal most_recent_video_segments
                     if most_recent_video_segments:
+                        for slice in most_recent_video_segments:
+                            for obj_id, seg_mask_down in most_recent_video_segments[slice].items():
+                                if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
+                                    seg_mask_down = seg_mask_down[0]
+                                if seg_mask_down.dtype == np.bool_:
+                                    seg_mask_down = seg_mask_down.astype(np.uint8)
+                                most_recent_video_segments[slice][obj_id] = cv2.resize(seg_mask_down, (original_w, original_h), interpolation=cv2.INTER_NEAREST)
                         self.view.show_segmentation(most_recent_video_segments, axis_str_suffix)
                         self.view.update_mesh_view(most_recent_video_segments, axis_str_suffix)
+                
                 self.view.after(100, show_final)
                 return
             
@@ -535,7 +544,7 @@ class SegmentationController:
             # Call segment_image on the downsampled volume.
             # Save the downsampled image temporarily as a NIfTI file.
             is_first = start_res == resolution
-            is_final = resolution == min(original_h, original_w)
+            is_final = resolution == (min(original_h, original_w)//2)
             self.segment_image(
                 downsampled_volume,
                 points,
