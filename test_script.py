@@ -1,81 +1,71 @@
 import os
+import re
 import argparse
-import nibabel as nib
 import numpy as np
-from model import ImageModel
-from modal_handler import segment
+from PIL import Image
+from metrics import dice_coefficient  # ensure this function is defined
 
-def dice_coefficient(y_true, y_pred):
+def load_mask(filepath):
     """
-    Compute the Dice coefficient between two segmentation masks.
-    
-    Args:
-        y_true (np.ndarray): The ground truth mask.
-        y_pred (np.ndarray): The predicted mask.
-    Returns:
-        The Dice coefficient between the two masks.
+    Load a PNG image and binarize it.
     """
-    y_true = y_true.astype(bool)
-    y_pred = y_pred.astype(bool)
-    intersection = np.logical_and(y_true, y_pred).sum()
-    denominator = y_true.sum() + y_pred.sum()
-    if denominator == 0:
-        return 1.0  # both masks are empty
-    return 2.0 * intersection / float(denominator)
-
+    from PIL import Image
+    img = Image.open(filepath)
+    data = np.array(img)
+    # If the image is RGB, take one channel (or convert to grayscale) as needed.
+    if data.ndim == 3:
+        # Using the first channel
+        data = data[:, :, 0]
+    # Binarize: consider any nonzero pixel as foreground.
+    return (data > 0).astype(np.uint8)
 
 def main():
-    parser = argparse.ArgumentParser(description="Test segmentation and compare with ground truth using DICE metric.")
-    parser.add_argument("--image", required=True, help="Path to input NIfTI image.")
-    parser.add_argument("--ground_truth", required=True, help="Path to NIfTI ground truth segmentation mask.")
-    parser.add_argument("--view", required=True, choices=["axial", "coronal", "sagittal"], help="View for segmentation.")
-    parser.add_argument("--slice", type=int, required=True, help="Slice index to test.")
-    parser.add_argument("--click", required=True, help="Click coordinate in format 'x,y' (e.g., 100,150).")
-    
+    parser = argparse.ArgumentParser(
+        description="Test segmentation using folders of PNG images and compute the DICE metric."
+    )
+    parser.add_argument("--input_dir", required=True, help="Folder containing segmentation PNG images.")
+    parser.add_argument("--ground_truth_dir", required=True, help="Folder containing ground truth PNG images.")
     args = parser.parse_args()
-    x, y = map(int, args.click.split(","))
-    
-    # Map view to an axis number:
-    view_to_axis = {"axial": 0, "coronal": 1, "sagittal": 2}
-    axis = view_to_axis[args.view]
-    
-    # Load the input image using our ImageModel
-    model = ImageModel(args.image)
-    image_slice = model.get_slice(axis, args.slice)
-    
-    # Prepare one-click input: a dictionary mapping an object ID to a list of (x, y, pos_flag)
-    # In this example, we assume object id 1 and a positive click (flag=1)
-    one_click_points = {1: [(x, y, 1)]}
-    
-    # Derive a folder name based on image name and view (this is used by our segmentation function)
-    base_name = os.path.basename(args.image).split('.')[0]
-    foldername = f"{base_name}_{args.view.upper()}_JPG"
-    
-    # Call the segmentation function (this should return a dictionary mapping frame index to segmentation masks)
-    print("Running segmentation...")
-    segmentation_result = segment(image_slice, one_click_points, args.slice, foldername)
-    
-    # Assume segmentation_result is a dict where key is the frame index—get the mask for object id 1.
-    if args.slice not in segmentation_result:
-        print(f"Segmentation result for slice {args.slice} not found.")
+
+    # List PNG files in each folder; assuming filenames match between folders.
+    input_files = sorted([f for f in os.listdir(args.input_dir) if f.lower().endswith('.png')])
+
+    if not input_files:
+        print("No PNG files found in the input folder.")
         return
-    # Here we assume that segmentation_result[args.slice] is a dict { object_id: mask }
-    if 1 not in segmentation_result[args.slice]:
-        print("Segmentation result for object id 1 not found.")
-        return
-    seg_mask = segmentation_result[args.slice][1]
     
-    # Load the ground truth
-    gt_img = nib.load(args.ground_truth)
-    gt_data = gt_img.get_fdata()
-    gt_slice = extract_slice(gt_data, axis, args.slice)
-    
-    # Binarize ground truth and segmentation mask if they are not already binary.
-    seg_mask_bin = (seg_mask > 0).astype(np.uint8)
-    gt_mask_bin = (gt_slice > 0).astype(np.uint8)
-    
-    dice = dice_coefficient(gt_mask_bin, seg_mask_bin)
-    print(f"DICE Coefficient: {dice:.4f}")
+    total_dice = 0.0
+    count = 0
+    for filename in input_files:
+        input_path = os.path.join(args.input_dir, filename)
+        # Extract slice number from the segmentation filename.
+        # For example, if the segmentation filename is "liver_000.png" then we get 000 as the index.
+        m = re.search(r'(\d+)', filename)
+        if m:
+            slice_idx = int(m.group(1))
+            # Construct the expected ground truth filename.
+            expected_gt_name = f"liver_GT_{slice_idx:03d}.png"
+        else:
+            print(f"Could not extract slice index from filename {filename}, skipping.")
+            continue
+
+        gt_path = os.path.join(args.ground_truth_dir, expected_gt_name)
+        if not os.path.exists(gt_path):
+            print(f"Ground truth file {expected_gt_name} not found for {filename}, skipping.")
+            continue
+
+        seg_mask = load_mask(input_path)
+        gt_mask = load_mask(gt_path)
+
+        dice = dice_coefficient(gt_mask, seg_mask)
+        print(f"{filename} vs {expected_gt_name}: DICE Coefficient = {dice}")
+        total_dice += dice
+        count += 1
+
+    if count > 0:
+        print(f"Average DICE Coefficient over {count} slices: {total_dice/count}")
+    else:
+        print("No matching files to compare.")
 
 if __name__ == '__main__':
     main()
