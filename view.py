@@ -187,7 +187,7 @@ class MainView(tk.Tk):
             tab.btn_segment = ttk.Button(tab, text="Segment Image", command=self._segment_image)
             tab.btn_segment.pack(fill="x", pady=5)
 
-            tab.btn_export_view = ttk.Button(tab, text="Export View with Segmentation Mask", command=self._export_view_with_mask)
+            tab.btn_export_view = ttk.Button(tab, text="Export View with Segmentation Mask", command=lambda: self._export_view_with_mask(binary=True))
             tab.btn_export_view.pack(fill="x", pady=2)
 
     def _build_image_frames(self):
@@ -739,7 +739,7 @@ class MainView(tk.Tk):
         exported_mesh.save(export_filename)
         tk.messagebox.showinfo("Export Successful", f"3D mesh exported as '{export_filename}'.")
 
-    def _export_view_with_mask(self):
+    def _export_view_with_mask(self, binary=False):
         """
         Exports the original image with overlayed segmentation mask in the active view
         as a 3D NIfTI file.
@@ -776,25 +776,45 @@ class MainView(tk.Tk):
         max_slice = sizes[dim] - 1
 
         composite_slices = []
-        for i in range(max_slice + 1):
-            # get the correct original slice for the orientation.
-            orig_slice = self._slice_request_callback(active_index, i)
+        last_slice = None
 
-            if active_index == 2:
+        original_np = np.asarray(self.model.image)
+        num_slices = original_np.shape[active_index]
+
+        for i in range(num_slices):
+            # get the correct original slice for the orientation.
+            if active_index == 0:
+                # axial view: slices along axis 0
+                orig_slice = original_np[i, :, :]
+            elif active_index == 1:
+                # coronal view: slices along axis 1
+                orig_slice = original_np[:, i, :]
+            elif active_index == 2:
+                # sagittal view: slices along axis 2
+                orig_slice = original_np[:, :, i]
                 orig_slice = np.rot90(orig_slice, k=-1)
                 orig_slice = np.fliplr(orig_slice)
 
+            if last_slice is not None:
+                print(f"is same: {last_slice == orig_slice}")
+            last_slice = orig_slice.copy()
+
+            # normalise original slice to 0-255
             slice_min, slice_max = orig_slice.min(), orig_slice.max()
             if slice_max > slice_min:  # to avoid divide-by-zero
                 norm_slice = (orig_slice - slice_min) / (slice_max - slice_min)
             else:
                 norm_slice = orig_slice * 0  # all zeros if it's a uniform slice
-            
             norm_slice_255 = (norm_slice * 255).astype(np.uint8)
 
             # convert grayscale to RGB
             rgb = np.stack([norm_slice_255] * 3, axis=-1).astype(np.float32)
-            composite = rgb.copy()
+            
+            # in binary mode, start with a black canvas, else start with original image
+            if binary:
+                composite = np.zeros_like(rgb)
+            else:
+                composite = rgb.copy()
 
             # if a segmentation mask exists for this slice, overlay each object. 
             if i in mask_dict:
@@ -808,17 +828,24 @@ class MainView(tk.Tk):
                     else:
                         mask_expanded = np.expand_dims(mask.astype(np.float32), axis=-1)
 
-                    # Get pointer color for this object, default to red if missing.
-                    color_name = self.pointer_color_mapping.get(obj_id, "red")
-                    rgb_color = np.array(mcolors.to_rgb(color_name)) * 255
-                    # Prepare an overlay of the pointer color.
-                    overlay = np.zeros_like(composite)
-                    overlay[:, :, 0] = rgb_color[0]
-                    overlay[:, :, 1] = rgb_color[1]
-                    overlay[:, :, 2] = rgb_color[2]
-                    # Alpha blend the overlay where mask is True.
-                    composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
-                composite = np.clip(composite, 0, 255)
+                    if binary:
+                        print(f"mask expanded: {mask_expanded.shape}")
+                        binary_mask = (mask_expanded > 0).squeeze()
+                        print(f"binary mask: {binary_mask.shape}")
+                        composite[binary_mask] = 255  # Set the mask area to white
+                    else:
+                        # Get pointer color for this object, default to red if missing.
+                        color_name = self.pointer_color_mapping.get(obj_id, "red")
+                        rgb_color = np.array(mcolors.to_rgb(color_name)) * 255
+                        # Prepare an overlay of the pointer color.
+                        overlay = np.zeros_like(composite)
+                        overlay[:, :, 0] = rgb_color[0]
+                        overlay[:, :, 1] = rgb_color[1]
+                        overlay[:, :, 2] = rgb_color[2]
+                        # Alpha blend the overlay where mask is True.
+                        composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
+                if not binary:
+                    composite = np.clip(composite, 0, 255)
             
             if composite.ndim == 4 and composite.shape[0] == 1:
                 composite = np.squeeze(composite, axis=0)
