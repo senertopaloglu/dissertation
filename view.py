@@ -187,7 +187,7 @@ class MainView(tk.Tk):
             tab.btn_segment = ttk.Button(tab, text="Segment Image", command=self._segment_image)
             tab.btn_segment.pack(fill="x", pady=5)
 
-            tab.btn_export_view = ttk.Button(tab, text="Export View with Segmentation Mask", command=lambda: self._export_view_with_mask(binary=True))
+            tab.btn_export_view = ttk.Button(tab, text="Export View with Segmentation Mask", command=lambda: self._export_view_with_mask())
             tab.btn_export_view.pack(fill="x", pady=2)
 
     def _build_image_frames(self):
@@ -739,7 +739,7 @@ class MainView(tk.Tk):
         exported_mesh.save(export_filename)
         tk.messagebox.showinfo("Export Successful", f"3D mesh exported as '{export_filename}'.")
 
-    def _export_view_with_mask(self, binary=False):
+    def _export_view_with_mask(self, binary=False, grayscale=False):
         """
         Exports the original image with overlayed segmentation mask in the active view
         as a 3D NIfTI file.
@@ -754,12 +754,14 @@ class MainView(tk.Tk):
                 return
             original_np = np.asarray(self.model.image)
             mask_dict = self.axial_view_mask
+            num_slices = original_np.shape[0]
         elif active_index == 1:
             if self.coronal_view_mask is None:
                 tk.messagebox.showerror("Export Error", "No segmentation mask available for coronal view.")
                 return
             original_np = np.asarray(self.model.image)  # Expect shape (Z, H, W)
             mask_dict = self.coronal_view_mask
+            num_slices = original_np.shape[1]
         elif active_index == 2:
             # Sagittal view: slices along axis 2
             if self.sagittal_view_mask is None:
@@ -767,19 +769,14 @@ class MainView(tk.Tk):
                 return
             original_np = np.asarray(self.model.image)  # Expect shape (Z, H, W)
             mask_dict = self.sagittal_view_mask
+            num_slices = original_np.shape[2]
         else:
             tk.messagebox.showerror("Export Error", "Invalid view selected.")
             return
-        
-        sizes = self.model.image.GetLargestPossibleRegion().GetSize()
-        dim = 2 if active_index == 0 else 1 if active_index == 1 else 0
-        max_slice = sizes[dim] - 1
 
         composite_slices = []
-        last_slice = None
 
-        original_np = np.asarray(self.model.image)
-        num_slices = original_np.shape[active_index]
+        grayscale_mapping = {1: 63, 2: 252, 3: 189, 4: 126}
 
         for i in range(num_slices):
             # get the correct original slice for the orientation.
@@ -795,10 +792,6 @@ class MainView(tk.Tk):
                 orig_slice = np.rot90(orig_slice, k=-1)
                 orig_slice = np.fliplr(orig_slice)
 
-            if last_slice is not None:
-                print(f"is same: {last_slice == orig_slice}")
-            last_slice = orig_slice.copy()
-
             # normalise original slice to 0-255
             slice_min, slice_max = orig_slice.min(), orig_slice.max()
             if slice_max > slice_min:  # to avoid divide-by-zero
@@ -811,7 +804,7 @@ class MainView(tk.Tk):
             rgb = np.stack([norm_slice_255] * 3, axis=-1).astype(np.float32)
             
             # in binary mode, start with a black canvas, else start with original image
-            if binary:
+            if binary or grayscale:
                 composite = np.zeros_like(rgb)
             else:
                 composite = rgb.copy()
@@ -829,10 +822,15 @@ class MainView(tk.Tk):
                         mask_expanded = np.expand_dims(mask.astype(np.float32), axis=-1)
 
                     if binary:
-                        print(f"mask expanded: {mask_expanded.shape}")
                         binary_mask = (mask_expanded > 0).squeeze()
-                        print(f"binary mask: {binary_mask.shape}")
                         composite[binary_mask] = 255  # Set the mask area to white
+                    elif grayscale:
+                        gray_val = grayscale_mapping.get(obj_id, 0)
+                        overlay = np.zeros_like(composite)
+                        overlay[:, :, 0] = gray_val
+                        overlay[:, :, 1] = gray_val
+                        overlay[:, :, 2] = gray_val
+                        composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
                     else:
                         # Get pointer color for this object, default to red if missing.
                         color_name = self.pointer_color_mapping.get(obj_id, "red")
