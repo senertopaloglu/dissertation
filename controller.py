@@ -82,8 +82,11 @@ class ProgressDialog:
             "Loading frames": 0,
             "Propagating segmentation": 0
         }
+
+        self.max_prop = 0
     
     def update_progress(self):
+        
         elapsed = time.time() - self.prep_start_time
         if self.current_progress["Preparing container"] < 100:
             computed = min(99, (elapsed / 360) * 99)
@@ -110,7 +113,11 @@ class ProgressDialog:
                 elif stage == "Propagating segmentation":
                     self.current_progress["Propagating segmentation"] = value
                     self.prop_progress["value"] = value
-                    self.prop_label.config(text=f"Propagating segmentation: {value}%")
+                    if value < self.max_prop:
+                        self.prop_label.config(text=f"Propagating segmentation backwards: {value}%")
+                    else:
+                        self.max_prop = value
+                        self.prop_label.config(text=f"Propagating segmentation: {value}%")
                     # if propagation has started and loading frames is not at 100%, force it
                     if value > 0 and self.current_progress["Loading frames"] < 100:
                         self.current_progress["Loading frames"] = 100
