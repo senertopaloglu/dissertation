@@ -1,2 +1,4 @@
 .venv
 *.dcm
+*.nii
+*.nii.gz
