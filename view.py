@@ -1,5 +1,5 @@
 import os
-
+from enum import Enum
 from collections import defaultdict
 
 import tkinter as tk
@@ -19,6 +19,21 @@ try:
     import nibabel as nib
 except ImportError:
     nib = None
+
+class ExportFormat(Enum):
+    BINARY = "binary"
+    GRAYSCALE = "grayscale"
+    RGB = "rgb"
+
+    def __str__(self):
+        # Allows nicer labels in radio buttons if needed
+        if self == ExportFormat.BINARY:
+            return "Binary (suitable for single object segmentation only)"
+        elif self == ExportFormat.GRAYSCALE:
+            return "Grayscale"
+        elif self == ExportFormat.RGB:
+            return "RGB"
+        return self.value
 
 class MainView(tk.Tk):
     """
@@ -739,10 +754,41 @@ class MainView(tk.Tk):
         exported_mesh.save(export_filename)
         tk.messagebox.showinfo("Export Successful", f"3D mesh exported as '{export_filename}'.")
 
-    def _export_view_with_mask(self, binary=False, grayscale=False):
+    def _export_view_with_mask(self):
         """
         Exports the original image with overlayed segmentation mask in the active view
         as a 3D NIfTI file.
+        Presents a popup using radio buttons (with an Enum) for user export format selection.
+        """
+        popup = tk.Toplevel(self)
+        popup.title("Choose Export Color Format")
+        popup.transient(self)
+
+        instruction_label = tk.Label(popup, text="Select export format for the exported view:")
+        instruction_label.pack(pady=10)
+
+        export_var = tk.StringVar(value=ExportFormat.BINARY.value)
+
+        # Create a radio button for each enum option.
+        for fmt in ExportFormat:
+            rb = tk.Radiobutton(popup, text=str(fmt), variable=export_var, value=fmt.value)
+            rb.pack(anchor="w", padx=20)
+
+        def on_confirm():
+            # Convert the selected value to an enum instance.
+            chosen_format = ExportFormat(export_var.get())
+            popup.destroy()
+            self._export_view_with_mask_process(chosen_format)
+            
+        confirm_button = ttk.Button(popup, text="OK", command=on_confirm)
+        confirm_button.pack(pady=10)
+        
+    def _export_view_with_mask_process(self, chosen_format: ExportFormat):
+        """
+        Carries out the export process using the chosen format:
+          - BINARY: Convert composite volume to binary image.
+          - GRAYSCALE: Convert composite volume to a weighted grayscale image.
+          - RGB: Retain the composite volume as is.
         """
         alpha = 0.4
 
@@ -804,7 +850,7 @@ class MainView(tk.Tk):
             rgb = np.stack([norm_slice_255] * 3, axis=-1).astype(np.float32)
             
             # in binary mode, start with a black canvas, else start with original image
-            if binary or grayscale:
+            if chosen_format == ExportFormat.BINARY or chosen_format == ExportFormat.GRAYSCALE:
                 composite = np.zeros_like(rgb)
             else:
                 composite = rgb.copy()
@@ -821,10 +867,10 @@ class MainView(tk.Tk):
                     else:
                         mask_expanded = np.expand_dims(mask.astype(np.float32), axis=-1)
 
-                    if binary:
+                    if chosen_format == ExportFormat.BINARY:
                         binary_mask = (mask_expanded > 0).squeeze()
                         composite[binary_mask] = 255  # Set the mask area to white
-                    elif grayscale:
+                    elif chosen_format == ExportFormat.GRAYSCALE:
                         gray_val = grayscale_mapping.get(obj_id, 0)
                         overlay = np.zeros_like(composite)
                         overlay[:, :, 0] = gray_val
@@ -842,7 +888,7 @@ class MainView(tk.Tk):
                         overlay[:, :, 2] = rgb_color[2]
                         # Alpha blend the overlay where mask is True.
                         composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
-                if not binary:
+                if chosen_format != ExportFormat.BINARY:
                     composite = np.clip(composite, 0, 255)
             
             if composite.ndim == 4 and composite.shape[0] == 1:
