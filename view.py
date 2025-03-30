@@ -433,7 +433,7 @@ class MainView(tk.Tk):
             k = 1 if color == "red" else 2 if color == "green" else 3
             points[k].append((int(x), int(y), int(pos_flag)))
 
-        self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix)
+        self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix, is_final=True)
     
     def show_image(self):
         self._build_image_frames()
