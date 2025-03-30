@@ -2,8 +2,12 @@ import os
 
 from collections import defaultdict
 
+import tkinter.filedialog as filedialog
+
 import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
+from ttkbootstrap import Window, Frame, Label, Button, Notebook, OptionMenu, Scale, Checkbutton
+
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -20,7 +24,7 @@ try:
 except ImportError:
     nib = None
 
-class MainView(tk.Tk):
+class MainView(Window):
     """
     The View in our MVC. Responsible for building and displaying the GUI.
     For all user interactions, we will invoke Controller callbacks.
@@ -66,7 +70,7 @@ class MainView(tk.Tk):
         self.rowconfigure(1, weight=3)
 
         # Sidebar + main frames
-        self.sidebar = tk.Frame(self, bg="lightgray", padx=10, pady=10)
+        self.sidebar = Frame(self, padding=10)
         self.sidebar.grid(row=0, column=0, rowspan=2, sticky="nsew")
 
         # Build the UI
@@ -80,28 +84,55 @@ class MainView(tk.Tk):
         Builds the left sidebar with buttons, color combobox, listbox, etc.
         """
         # Buttons
-        btn_import = ttk.Button(self.sidebar, text="Import Image", command=self._import_image)
+        btn_import = Button(self.sidebar, text="Import Image", command=self._import_image, bootstyle="primary")
         btn_import.pack(fill="x", pady=5)
 
-        btn_export = ttk.Button(self.sidebar, text="Export 3D Mesh Model", command=self._export_3d_mesh)
+        btn_export = Button(self.sidebar, text="Export 3D Mesh Model", bootstyle="secondary", command=self._export_3d_mesh)
         btn_export.pack(fill="x", pady=5)
 
-        tabControl = ttk.Notebook(self.sidebar)
-        tab1 = ttk.Frame(tabControl)
-        tab2 = ttk.Frame(tabControl)
-        tab3 = ttk.Frame(tabControl)
+        style = ttk.Style()
+
+        style.configure(
+            "DarkerTabs.TNotebook",
+            background="white",
+            tabmargins=[2, 5, 2, 0] # extra spacing around tabs
+        )
+
+        # Define how each tab looks
+        style.configure(
+            "DarkerTabs.TNotebook.Tab",
+            background="#DDDDDD",         # darker gray for inactive tabs
+            padding=[10, 4],          # extra space around the tab text
+            font=("TkDefaultFont", 10)
+        )
+
+        # Map the 'selected' state to a different background/foreground
+        style.map(
+            "DarkerTabs.TNotebook.Tab",
+            background=[("selected", "white")],   # light blue background on active tab
+            foreground=[("selected", "black")],      # make the active tab text blue
+        )
+
+        tabControl = Notebook(self.sidebar, style="DarkerTabs.TNotebook")
+        tab1 = Frame(tabControl)
+        tab2 = Frame(tabControl)
+        tab3 = Frame(tabControl)
 
         tabControl.add(tab1, text="Axial")
         tabControl.add(tab2, text="Coronal")
         tabControl.add(tab3, text="Sagittal")
-        tabControl.pack(fill="x", pady=5) # TODO: if doesnt work, try pack(expand=1, fill="both")
+        tabControl.pack(fill="x", pady=5)
 
         tabs = [tab1, tab2, tab3]
 
         self.tabControl = tabControl
         self.tabs = tabs
 
-        for tab in tabs:
+        
+
+        for i, tab in enumerate(tabs):
+            tab.style_name = f"PointerColor.TMenubutton.Tab{i}"
+            style.layout(tab.style_name, style.layout("TMenubutton"))
             tab.pointer_color_var = None
             tab.pointer_color_optionmenu = None
             tab.points_listbox = None
@@ -111,39 +142,73 @@ class MainView(tk.Tk):
             tab.redo_stack = []
 
         for tab in tabs:
-            pointer_label = tk.Label(tab, text="Pointer Colour")
+            content_frame = Frame(tab, padding=(10, 5))
+            content_frame.pack(fill="both", expand=True)
+
+            pointer_label = Label(content_frame, text="Pointer Colour")
             pointer_label.pack(pady=(10, 2))
 
-            pointer_color_var = tk.StringVar(value="Red")
+            pointer_color_var = ttk.StringVar(value="Red")
             tab.pointer_color_var = pointer_color_var
 
-            pos_click_var = tk.BooleanVar(value=True)
+            pos_click_var = ttk.BooleanVar(value=True)
             tab.pos_click_var = pos_click_var
-            pos_click_checkbox = tk.Checkbutton(
-                tab,
+            pos_click_checkbox = Checkbutton(
+                content_frame,
                 text="Positive Click",
                 variable=pos_click_var
             )
             if not self.model.image:
                 pos_click_checkbox.config(state="disabled")
 
-            pos_click_checkbox.pack(pady=(5,2))
+            pos_click_checkbox.pack(pady=(5, 2))
             tab.pos_click_checkbox = pos_click_checkbox
 
-            colors = ["Red", "Blue", "Green", "Orange", "Purple", "Cyan", "Magenta", "Teal", "Black", "Gray"]
+            colors = ["Red", "Blue", "Green", "Orange", "Purple",
+                      "Cyan", "Magenta", "Teal", "Black", "Gray"]
 
-            tab.pointer_color_optionmenu = tk.OptionMenu(tab, tab.pointer_color_var, *colors)
+            tab.pointer_color_optionmenu = OptionMenu(content_frame, tab.pointer_color_var, "")
             tab.pointer_color_optionmenu.pack(fill="x")
 
+            tab.pointer_color_optionmenu.configure(textvariable=tab.pointer_color_var)
             # Access the underlying menu and configure each item's text color
             menu = tab.pointer_color_optionmenu["menu"]
-            for i, color in enumerate(colors):
-                menu.entryconfig(i, foreground=color.lower())
+            # clear any auto-added items
+            menu.delete(0, "end")
+
+            for color in colors:
+                menu.add_command(
+                    label=color,
+                    foreground=color.lower(),
+                    background="white",
+                    activeforeground="white",
+                    activebackground=color.lower(),
+                    command=lambda c=color, var=pointer_color_var: var.set(c)
+                )
+            
+            tab.pointer_color_var.set("Red")
 
             # Define a callback to update the OptionMenu button color.
             def update_option_menu_color(*args, current_tab=tab):
                 selected = current_tab.pointer_color_var.get().lower()  # Convert to lowercase for consistency.
-                current_tab.pointer_color_optionmenu.config(fg=selected, activeforeground=selected)
+                
+                # update option menu to have a white bg and 'selected' text color
+                style.configure(
+                    current_tab.style_name,
+                    foreground=selected,
+                    background="white",
+                    relief="solid",
+                    borderwidth=1
+                )
+                style.map(
+                    current_tab.style_name,
+                    background=[
+                        ("active", "white"),
+                        ("pressed", "white")
+                    ]
+                )
+                current_tab.pointer_color_optionmenu.configure(style=current_tab.style_name)
+
                 # Check if there is any point in current_tab.points with the same color.
                 points_for_color = [pt for pt in current_tab.points if pt[2].lower() == selected]
                 if points_for_color:
@@ -163,13 +228,13 @@ class MainView(tk.Tk):
             
             
 
-            points_label = tk.Label(tab, text="Selected Points")
+            points_label = Label(content_frame, text="Selected Points")
             points_label.pack(pady=(10, 2))
 
-            points_frame = tk.Frame(tab)
+            points_frame = Frame(content_frame)
             points_frame.pack(fill="x")
 
-            scrollbar = tk.Scrollbar(points_frame, orient="vertical")
+            scrollbar = ttk.Scrollbar(points_frame, orient="vertical")
             tab.points_listbox = tk.Listbox(
                 points_frame,
                 height=5,
@@ -179,15 +244,15 @@ class MainView(tk.Tk):
             scrollbar.config(command=tab.points_listbox.yview)
             scrollbar.pack(side="right", fill="y")
 
-            btn_undo = ttk.Button(tab, text="Undo", command=self._on_undo_click)
+            btn_undo = Button(content_frame, text="Undo", command=self._on_undo_click, bootstyle="info")
             btn_undo.pack(fill="x", pady=2)
-            btn_redo = ttk.Button(tab, text="Redo", command=self._on_redo_click)
+            btn_redo = Button(content_frame, text="Redo", command=self._on_redo_click, bootstyle="info")
             btn_redo.pack(fill="x", pady=2)
 
-            tab.btn_segment = ttk.Button(tab, text="Segment Image", command=self._segment_image)
+            tab.btn_segment = Button(content_frame, text="Segment Image", command=self._segment_image, bootstyle="success")
             tab.btn_segment.pack(fill="x", pady=5)
 
-            tab.btn_export_view = ttk.Button(tab, text="Export View with Segmentation Mask", command=self._export_view_with_mask)
+            tab.btn_export_view = ttk.Button(content_frame, text="Export View with Segmentation Mask", command=self._export_view_with_mask)
             tab.btn_export_view.pack(fill="x", pady=2)
 
     def _build_image_frames(self):
@@ -232,22 +297,26 @@ class MainView(tk.Tk):
         """
         Helper to create a labeled frame with a matplotlib FigureCanvas and a slider.
         """
-        frame = tk.Frame(self, bd=1, relief="solid")
+        outer_frame = Frame(self, relief="solid", borderwidth=1)
         
-        label = tk.Label(frame, text=text)
-        label.pack()
+        content_frame = Frame(outer_frame)
+        content_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
-        control_frame = tk.Frame(frame)
-        control_frame.pack(side="top", fill="x", padx=5, pady=5)
+        label = Label(content_frame, text=text)
+        label.pack(side="top", fill="x", expand=True)
+        label.configure(anchor="center", justify="center")
+
+        control_frame = Frame(content_frame)
+        control_frame.pack(side="top", fill="x", pady=5)
 
         fig, ax = plt.subplots(figsize=(4,4))
-        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas = FigureCanvasTkAgg(fig, master=content_frame)
         canvas.tab_index = axis
         canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
 
-        frame.canvas = canvas
+        outer_frame.canvas = canvas
         canvas.axis = axis
-        frame.canvas_ax=ax
+        outer_frame.canvas_ax=ax
 
         # Connect click events
         fig.canvas.mpl_connect(
@@ -261,14 +330,14 @@ class MainView(tk.Tk):
             max_slice = sizes[dim] - 1
 
             # initialise show/hide mask and show/hide points vars before slider.set
-            show_mask_var=tk.BooleanVar()
+            show_mask_var = ttk.BooleanVar()
             canvas.show_mask_var = show_mask_var
 
-            show_points_var=tk.BooleanVar(value=True) 
+            show_points_var = ttk.BooleanVar(value=True)
             canvas.show_points_var = show_points_var
 
             # Slider to navigate slices
-            slider = ttk.Scale(
+            slider = Scale(
                 control_frame, 
                 from_=0, 
                 to=max_slice, 
@@ -281,7 +350,7 @@ class MainView(tk.Tk):
             slider.set(initial_slice)
 
             # checkbox to show/hide segmentation mask, show_mask_var is auto updated on click
-            show_mask_checkbox = tk.Checkbutton(
+            show_mask_checkbox = Checkbutton(
                 control_frame,
                 text="Show Segmentation Mask",
                 variable=show_mask_var,
@@ -299,7 +368,7 @@ class MainView(tk.Tk):
             canvas.show_mask_checkbox = show_mask_checkbox
 
             # checkbox to show/hide points
-            show_points_checkbox = tk.Checkbutton(
+            show_points_checkbox = Checkbutton(
                 control_frame,
                 text="Show Points",
                 variable=show_points_var,
@@ -315,26 +384,30 @@ class MainView(tk.Tk):
 
             canvas.slider = slider
 
-        return frame
+        return outer_frame
     
     def _create_mesh_view_frame(self, text):
         """
         Creates a dedicated frame for the 3D mesh view that is initially empty and
         ignores click events.
         """
-        frame = tk.Frame(self, bd=1, relief="solid")
+        outer_frame = Frame(self, relief="solid", borderwidth=1)
+
+        content_frame = Frame(outer_frame)
+        content_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        label = tk.Label(frame, text=text)
+        label = Label(content_frame, text=text)
         label.pack()
-        frame.label = label
+        outer_frame.label = label
 
         fig, ax = plt.subplots(figsize=(4,4))
-        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas = FigureCanvasTkAgg(fig, master=content_frame)
         canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
-        frame.canvas = canvas
-        frame.canvas_ax=ax
+        
+        outer_frame.canvas = canvas
+        outer_frame.canvas_ax = ax
 
-        return frame
+        return outer_frame
 
 
     def _update_slice(self, ax, canvas, axis, val, text):
@@ -354,10 +427,10 @@ class MainView(tk.Tk):
             if axis == 0:
                 for out_obj_id, out_mask in self.axial_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
-            if axis==1:
+            if axis == 1:
                 for out_obj_id, out_mask in self.coronal_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
-            if axis==2:
+            if axis == 2:
                 for out_obj_id, out_mask in self.sagittal_view_mask[slice_index].items():
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
         
@@ -375,7 +448,7 @@ class MainView(tk.Tk):
         """
         Opens a file dialog to select a .nii file and loads it.
         """
-        file_path = tk.filedialog.askopenfilename(
+        file_path = filedialog.askopenfilename(
             title="Select a NIfTI file",
             filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")]
         )
@@ -425,7 +498,7 @@ class MainView(tk.Tk):
             return
         
         points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
-        
+
         for idx, entry in enumerate(current_tab.points_listbox.get(0, 'end')):
             pos_flag = 1 if "Positive click" in entry else 0
             x, y = entry.split(' at ')[-1].strip('()').split(',')
@@ -446,19 +519,19 @@ class MainView(tk.Tk):
 
         if axis_str_suffix == "AXIAL":
             axis = self.axial_view
-            self.axial_view_mask=segmentation_mask
+            self.axial_view_mask = segmentation_mask
             label = "Axial View"
-            axis_num=0
+            axis_num = 0
         elif axis_str_suffix == "CORONAL":
             axis = self.coronal_view
-            self.coronal_view_mask=segmentation_mask
+            self.coronal_view_mask = segmentation_mask
             label = "Coronal View"
-            axis_num=1
+            axis_num = 1
         elif axis_str_suffix == "SAGITTAL":
             axis = self.sagittal_view
-            self.sagittal_view_mask=segmentation_mask
+            self.sagittal_view_mask = segmentation_mask
             label = "Sagittal View"
-            axis_num=2
+            axis_num = 2
         else:
             raise ValueError("Invalid axis string.")
             return
@@ -524,7 +597,7 @@ class MainView(tk.Tk):
         
         prefix = "Positive click" if pos_flag else "Negative click"
         current_tab.points_listbox.insert("end", f"{prefix} at ({x},{y})")
-        idx=current_tab.points_listbox.size()-1
+        idx = current_tab.points_listbox.size()-1
         try:
             """
             Tkinters standard Listbox widget doesnt offer robust per-item styling in all versions.
