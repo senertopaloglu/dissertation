@@ -69,12 +69,12 @@ def do_some_magic(points, frame_idx, foldername):
     # cwd=os.getcwd()
     # print(os.listdir(cwd))
 
-    subprocess.call(['gcc', '--version'])
-    subprocess.call(['which', 'gcc'])
-    subprocess.call([sys.executable, '-m', 'pip', 'install', '--no-build-isolation', "-e", "."])
-    subprocess.call(['gcc', '--version'])
-    subprocess.call([sys.executable, '-m', 'pip', 'install', '-e', ".[demo]"])
-    subprocess.call(['gcc', '--version'])
+    # subprocess.call(['gcc', '--version'])
+    # subprocess.call(['which', 'gcc'])
+    subprocess.call([sys.executable, '-m', 'pip', 'install', '--prefer-binary', '--no-build-isolation', "-e", ".[demo]"])
+    # subprocess.call(['gcc', '--version'])
+    # subprocess.call([sys.executable, '-m', 'pip', 'install', '--prefer-binary', '-e', ".[demo]"])
+    # subprocess.call(['gcc', '--version'])
 
     # TODO: get line above to work. find a way of running notebook code (with it's import statements)
 
@@ -114,14 +114,8 @@ def do_some_magic(points, frame_idx, foldername):
 
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
 
-    # print("*********************")
-    # print(os.getcwd())
-
     # `video_dir` a directory of JPEG frames with filenames like `<frame_index>.jpg`
     video_dir = f"./frames/{foldername}"
-
-    # print(os.listdir(video_dir))
-    # print("*********************")
 
     # scan all the JPEG frame names in this directory
     frame_names = [
@@ -130,18 +124,7 @@ def do_some_magic(points, frame_idx, foldername):
     ]
     frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
 
-    # take a look the src slice the user interacted with
-    plt.figure(figsize=(12, 8))
-    plt.title(f"frame {frame_idx}")
-    plt.imshow(Image.open(os.path.join(video_dir, frame_names[frame_idx])))
-
-
-
-
     inference_state = predictor.init_state(video_path=video_dir)
-
-
-
 
     predictor.reset_state(inference_state)
 
@@ -166,16 +149,6 @@ def do_some_magic(points, frame_idx, foldername):
             points=points,
             labels=labels,
         )
-
-        # show the results on the current (interacted) frame
-        plt.figure(figsize=(12, 8))
-        plt.title(f"frame {ann_frame_idx}")
-        plt.imshow(Image.open(os.path.join(video_dir, frame_names[ann_frame_idx])))
-        show_points(points, labels, plt.gca())
-        for i, out_obj_id in enumerate(out_obj_ids):    
-            show_points(*prompts[out_obj_id], plt.gca())
-            show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_id)
-
     
     # run propagation throughout the video and collect the results in a dict
     # prop forwards
