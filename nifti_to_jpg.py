@@ -4,7 +4,7 @@ import numpy as np
 import os
 from PIL import Image
 
-def nifti_to_jpg(nifti_path, output_folder, axis):
+def nifti_to_jpg(nifti_path, output_folder, axis, downsampled=False):
     # Load NIfTI image
     img = nib.load(nifti_path)
     img_canonical = nib.as_closest_canonical(img)
@@ -21,7 +21,10 @@ def nifti_to_jpg(nifti_path, output_folder, axis):
     os.makedirs(output_folder, exist_ok=True)
 
     axis_lower = axis.lower()
-    if is_rgb:
+
+    if downsampled:
+        slice_axis = 0
+    elif is_rgb:
         # For a 4D RGB image with shape (Z, H, W, 3)
         if axis_lower == 'axial':
             slice_axis = 0
@@ -34,7 +37,6 @@ def nifti_to_jpg(nifti_path, output_folder, axis):
             slice_axis = 0
             axis_lower = 'axial'
     else:
-        # For a 3D grayscale image with shape (H, W, Z)
         if axis_lower == 'axial':
             slice_axis = 2
         elif axis_lower == 'coronal':
@@ -85,9 +87,11 @@ def main():
     parser.add_argument("nifti_path", help="Path to the input NIfTI file")
     parser.add_argument("output_folder", help="Directory where JPG images will be saved")
     parser.add_argument("--axis", default="axial", help="Orientation axis to slice the image (default: axial)")
+    parser.add_argument("--downsampled", action="store_true",
+                        help="Indicate that the NIfTI file is downsampled (slices forced to be square)")
     args = parser.parse_args()
 
-    nifti_to_jpg(args.nifti_path, args.output_folder, args.axis)
+    nifti_to_jpg(args.nifti_path, args.output_folder, args.axis, downsampled=args.downsampled)
 
 if __name__ == "__main__":
     main()

@@ -8,6 +8,7 @@ import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap import Window, Frame, Label, Button, Notebook, OptionMenu, Scale, Checkbutton
 
+from tkinter import ttk, messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -254,6 +255,13 @@ class MainView(Window):
 
             tab.btn_export_view = ttk.Button(content_frame, text="Export View with Segmentation Mask", command=self._export_view_with_mask)
             tab.btn_export_view.pack(fill="x", pady=2)
+            # automated multiresolution segmentation button
+            tab.btn_auto_seg = ttk.Button(
+                tab,
+                text="Apply Multiresolution Segmentation",
+                command=lambda t=tab: self.controller.multiresolution_segmentation(t)
+            )
+            tab.btn_auto_seg.pack(fill="x", pady=5)
 
     def _build_image_frames(self):
         """
@@ -506,7 +514,7 @@ class MainView(Window):
             obj_id = self.pointer_color_mapping.get(color, 1)
             points[obj_id].append((int(x), int(y), int(pos_flag)))
 
-        self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix)
+        self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix, is_final=True)
     
     def show_image(self):
         self._build_image_frames()

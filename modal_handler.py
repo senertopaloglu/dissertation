@@ -1,5 +1,6 @@
 import os
 import sys
+import site
 
 import torch
 import numpy as np
@@ -55,7 +56,7 @@ def show_points(coords, labels, ax, marker_size=200):
     ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
 
 @app.function(gpu="L4", image=image, volumes={"/root/temp":vol}, timeout=1000, mounts=[])
-def do_some_magic(points, frame_idx, foldername):
+def do_some_magic(points, frame_idx, foldername, multi_resolution, is_first, is_final):
     import subprocess
 
     # output = subprocess.check_output(["nvidia-smi"], text=True)
@@ -66,17 +67,27 @@ def do_some_magic(points, frame_idx, foldername):
     # print(os.listdir(cwd))
     
     os.chdir(os.path.expanduser("temp/SAM_2_Medical_3D"))
-    # cwd=os.getcwd()
-    # print(os.listdir(cwd))
 
-    # subprocess.call(['gcc', '--version'])
-    # subprocess.call(['which', 'gcc'])
-    subprocess.call([sys.executable, '-m', 'pip', 'install', '--prefer-binary', '--no-build-isolation', "-e", ".[demo]"])
-    # subprocess.call(['gcc', '--version'])
-    # subprocess.call([sys.executable, '-m', 'pip', 'install', '--prefer-binary', '-e', ".[demo]"])
-    # subprocess.call(['gcc', '--version'])
+    venv_dir = "venv"
+    if not os.path.exists(venv_dir):
+        subprocess.call([sys.executable, "-m", "venv", venv_dir])
+    venv_python = os.path.join(venv_dir, "bin", "python")
+    venv_site = os.path.join(venv_dir, "lib", f"python{sys.version_info.major}.{sys.version_info.minor}", "site-packages")
+    # Update current process to use venv's site-packages
+    if venv_site not in sys.path:
+        site.addsitedir(venv_site)
 
-    # TODO: get line above to work. find a way of running notebook code (with it's import statements)
+
+    if multi_resolution and is_first:
+        try:
+            subprocess.check_output([venv_python, '-m', 'pip', 'show', 'hydra-core'])
+        except subprocess.CalledProcessError as e:
+            subprocess.call([venv_python, '-m', 'pip', 'install', 'hydra-core'])
+
+        try:
+            subprocess.call([venv_python, '-m', 'pip', 'show', ".[demo]"])
+        except subprocess.CalledProcessError as e:
+            subprocess.call([sys.executable, '-m', 'pip', 'install', '--prefer-binary', '--no-build-isolation', "-e", ".[demo]"])
 
     torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
     if torch.cuda.get_device_properties(0).major >= 8:
@@ -97,10 +108,11 @@ def do_some_magic(points, frame_idx, foldername):
     # #sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
     current_directory = os.getcwd()
-    os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + os.pathsep + current_directory
+    if multi_resolution and is_first:
+        os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + os.pathsep + current_directory 
 
-    if current_directory not in sys.path:
-        sys.path.append(current_directory)
+        if current_directory not in sys.path:
+            sys.path.append(current_directory)
 
     # #sys.path.append(os.path.expanduser("./sam2"))
 
@@ -149,31 +161,41 @@ def do_some_magic(points, frame_idx, foldername):
             points=points,
             labels=labels,
         )
+
+    if is_final:
+        # run propagation throughout the video and collect the results in a dict
+        # prop forwards
+        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+            video_segments[out_frame_idx] = {
+                out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+                for i, out_obj_id in enumerate(out_obj_ids)
+            }
+        # prop backwards
+        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx-1, reverse=True):
+            video_segments[out_frame_idx] = {
+                out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+                for i, out_obj_id in enumerate(out_obj_ids)
+            }
+    else:
+        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx, max_frame_num_to_track=0):
+            video_segments[out_frame_idx] = {
+                out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+                for i, out_obj_id in enumerate(out_obj_ids)
+            }
     
-    # run propagation throughout the video and collect the results in a dict
-    # prop forwards
-    for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
-        video_segments[out_frame_idx] = {
-            out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
-            for i, out_obj_id in enumerate(out_obj_ids)
-        }
-    # prop backwards
-    for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx-1, reverse=True):
-        video_segments[out_frame_idx] = {
-            out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
-            for i, out_obj_id in enumerate(out_obj_ids)
-        }
-    
+    if "VIRTUAL_ENV" in os.environ:
+        del os.environ["VIRTUAL_ENV"]
+
     return video_segments
 
-def segment(slices, points, frame_idx, foldername):
+def segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final):
     """
     segmentation functionality.
     """
     # print(app.name)
     with modal.enable_output():
         with app.run():
-            video_segments=do_some_magic.remote(points, frame_idx, foldername)
+            video_segments=do_some_magic.remote(points, frame_idx, foldername, multi_resolution, is_first, is_final)
     # video_dir = f"./{foldername}"
     # vis_frame_stride = 15
     # frame_names = [
