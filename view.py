@@ -70,7 +70,7 @@ class MainView(Window):
         self.state("zoomed")
 
         # Prepare main window layout
-        self.columnconfigure(0, weight=1, minsize=250)  # Left sidebar
+        self.columnconfigure(0, weight=1, minsize=280)  # Left sidebar
         self.columnconfigure(1, weight=3)
         self.columnconfigure(2, weight=3)
         self.rowconfigure(0, weight=3)
@@ -94,7 +94,21 @@ class MainView(Window):
         btn_import = Button(self.sidebar, text="Import Image", command=self._import_image, bootstyle="primary", image=self.import_icon, compound="left")
         btn_import.pack(fill="x", pady=5)
 
-        btn_export = Button(self.sidebar, text="Export 3D Mesh Model", bootstyle="secondary", command=self._export_3d_mesh, image=self.export_icon, compound="left")
+        btn_export_style = ttk.Style()
+        btn_export_style.configure("DarkGrey.TButton",
+                                   background="#555555",
+                                   foreground="white",
+                                   bordercolor="#555555",
+                                   borderwidth=0,
+                                   focusthickness=0,
+                                   relief="flat",
+                                   padding=(10,8),
+                                   anchor="center",
+                                   justify="center")
+        btn_export_style.map("DarkGrey.TButton",
+                                background=[("active", "#666666")]) # lighter on hover
+
+        btn_export = Button(self.sidebar, text="Export 3D Mesh Model", command=self._export_3d_mesh, image=self.export_icon, compound="left", style="DarkGrey.TButton")
         btn_export.pack(fill="x", pady=5)
 
         style = ttk.Style()
@@ -119,6 +133,17 @@ class MainView(Window):
             background=[("selected", "white")],   # light blue background on active tab
             foreground=[("selected", "black")],      # make the active tab text blue
         )
+
+        style.configure("DarkGreen.TButton",
+                            background="#006400",       # dark green background
+                            foreground="white",
+                            relief="flat",
+                            borderwidth=0,
+                            padding=(10,8),
+                            anchor="center",
+                            justify="center")
+        style.map("DarkGreen.TButton",
+                  background=[("active", "#228B22")])  # slightly lighter green on hover
 
         tabControl = Notebook(self.sidebar, style="DarkerTabs.TNotebook")
         tab1 = Frame(tabControl)
@@ -152,9 +177,6 @@ class MainView(Window):
             content_frame = Frame(tab, padding=(10, 5))
             content_frame.pack(fill="both", expand=True)
 
-            pointer_label = Label(content_frame, text="Pointer Colour")
-            pointer_label.pack(pady=(10, 2))
-
             pointer_color_var = ttk.StringVar(value="Red")
             tab.pointer_color_var = pointer_color_var
 
@@ -170,6 +192,9 @@ class MainView(Window):
 
             pos_click_checkbox.pack(pady=(5, 2))
             tab.pos_click_checkbox = pos_click_checkbox
+
+            pointer_label = Label(content_frame, text="Pointer colour:")
+            pointer_label.pack(pady=(10, 2))
 
             colors = ["Red", "Blue", "Green", "Orange", "Purple",
                       "Cyan", "Magenta", "Teal", "Black", "Gray"]
@@ -251,23 +276,35 @@ class MainView(Window):
             scrollbar.config(command=tab.points_listbox.yview)
             scrollbar.pack(side="right", fill="y")
 
-            btn_undo = Button(content_frame, text="Undo", command=self._on_undo_click, bootstyle="info", image=self.undo_icon, compound="left")
-            btn_undo.pack(fill="x", pady=2)
-            btn_redo = Button(content_frame, text="Redo", command=self._on_redo_click, bootstyle="info", image=self.redo_icon, compound="left")
-            btn_redo.pack(fill="x", pady=2)
 
-            tab.btn_segment = Button(content_frame, text="Segment Image", command=self._segment_image, bootstyle="success", image=self.segment_icon, compound="left")
-            tab.btn_segment.pack(fill="x", pady=5)
+            undo_redo_frame = Frame(content_frame)
+            undo_redo_frame.pack(fill="x", pady=2)
+            undo_redo_frame.columnconfigure(0, weight=1)
+            undo_redo_frame.columnconfigure(1, weight=1)
 
-            tab.btn_export_view = ttk.Button(content_frame, text="Export View with Segmentation Mask", command=self._export_view_with_mask, image=self.export_icon, compound="left")
-            tab.btn_export_view.pack(fill="x", pady=2)
+            btn_undo = Button(undo_redo_frame, text="Undo", command=self._on_undo_click, bootstyle="info", image=self.undo_icon, compound="left")
+            btn_undo.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+
+            btn_redo = Button(undo_redo_frame, text="Redo", command=self._on_redo_click, bootstyle="info", image=self.redo_icon, compound="left")
+            btn_redo.grid(row=0, column=1, sticky="ew")
+
+            tab.btn_segment = Button(content_frame, text="Segment Image", command=self._segment_image, image=self.segment_icon, compound="left", style="DarkGreen.TButton")
+            tab.btn_segment.pack(fill="x", pady=2)
+
             # automated multiresolution segmentation button
             tab.btn_auto_seg = ttk.Button(
-                tab,
-                text="Apply Multiresolution Segmentation",
-                command=lambda t=tab: self.controller.multiresolution_segmentation(t)
+                content_frame,
+                text="Apply Multiresolution\nSegmentation",
+                command=lambda t=tab: self.controller.multiresolution_segmentation(t),
+                image=self.segment_icon,
+                compound="left",
+                bootstyle="success"
             )
-            tab.btn_auto_seg.pack(fill="x", pady=5)
+            tab.btn_auto_seg.pack(fill="x", pady=2)
+
+            tab.btn_export_view = ttk.Button(content_frame, text="Export View with\nSegmentation Mask", command=self._export_view_with_mask, image=self.export_icon, compound="left", style="DarkGrey.TButton")
+            tab.btn_export_view.pack(fill="x", pady=2)
+            
 
     def _build_image_frames(self):
         """
@@ -316,8 +353,8 @@ class MainView(Window):
         content_frame = Frame(outer_frame)
         content_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
-        label = Label(content_frame, text=text)
-        label.pack(side="top", fill="x", expand=True)
+        label = Label(content_frame, text=text, font=("TkDefaultFont", 13))
+        label.pack(side="top", fill="x", expand=True, pady=(5,0))
         label.configure(anchor="center", justify="center")
 
         control_frame = Frame(content_frame)
@@ -370,7 +407,7 @@ class MainView(Window):
                 variable=show_mask_var,
                 command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
             )
-            show_mask_checkbox.pack(side="top", fill="x", pady=5)
+            show_mask_checkbox.pack(side="top", anchor="center", pady=5)
 
             if axis==0 and self.axial_view_mask is None:
                 show_mask_checkbox.config(state="disabled")
@@ -388,7 +425,7 @@ class MainView(Window):
                 variable=show_points_var,
                 command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text)
             )
-            show_points_checkbox.pack(side="top", fill="x", pady=5)
+            show_points_checkbox.pack(side="top", anchor="center", pady=(3,2))
             # initially disable the checkbox because there are no points to show yet
             show_points_checkbox.config(state="disabled")
             canvas.show_points_checkbox = show_points_checkbox
@@ -410,8 +447,8 @@ class MainView(Window):
         content_frame = Frame(outer_frame)
         content_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        label = Label(content_frame, text=text)
-        label.pack()
+        label = Label(content_frame, text=text, font=("TkDefaultFont", 13))
+        label.pack(pady=(5,0))
         outer_frame.label = label
 
         fig, ax = plt.subplots(figsize=(4,4))
