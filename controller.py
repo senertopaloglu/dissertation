@@ -51,7 +51,6 @@ class ProgressDialog:
     def __init__(self, master):
         self.top = tk.Toplevel(master)
         self.top.title("Progress")
-        self.top.geometry("300x250")
         self.top.grab_set() # make progress dialog modal
 
         self.prep_label = tk.Label(self.top, text="Preparing container: 0%")
