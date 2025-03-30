@@ -8,7 +8,7 @@ import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap import Window, Frame, Label, Button, Notebook, OptionMenu, Scale, Checkbutton
 
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -35,6 +35,12 @@ class MainView(Window):
 
         self.model = model
         self.controller = controller
+
+        self.undo_icon = tk.PhotoImage(file=os.path.join("images", "undo.png"))
+        self.redo_icon = tk.PhotoImage(file=os.path.join("images", "redo.png"))
+        self.segment_icon = tk.PhotoImage(file=os.path.join("images", "segment.png"))
+        self.import_icon = tk.PhotoImage(file=os.path.join("images", "import.png"))
+        self.export_icon = tk.PhotoImage(file=os.path.join("images", "export.png"))
 
         # map pointer ID (1-10) to color names
         self.pointer_color_mapping = {
@@ -85,10 +91,10 @@ class MainView(Window):
         Builds the left sidebar with buttons, color combobox, listbox, etc.
         """
         # Buttons
-        btn_import = Button(self.sidebar, text="Import Image", command=self._import_image, bootstyle="primary")
+        btn_import = Button(self.sidebar, text="Import Image", command=self._import_image, bootstyle="primary", image=self.import_icon, compound="left")
         btn_import.pack(fill="x", pady=5)
 
-        btn_export = Button(self.sidebar, text="Export 3D Mesh Model", bootstyle="secondary", command=self._export_3d_mesh)
+        btn_export = Button(self.sidebar, text="Export 3D Mesh Model", bootstyle="secondary", command=self._export_3d_mesh, image=self.export_icon, compound="left")
         btn_export.pack(fill="x", pady=5)
 
         style = ttk.Style()
@@ -245,15 +251,15 @@ class MainView(Window):
             scrollbar.config(command=tab.points_listbox.yview)
             scrollbar.pack(side="right", fill="y")
 
-            btn_undo = Button(content_frame, text="Undo", command=self._on_undo_click, bootstyle="info")
+            btn_undo = Button(content_frame, text="Undo", command=self._on_undo_click, bootstyle="info", image=self.undo_icon, compound="left")
             btn_undo.pack(fill="x", pady=2)
-            btn_redo = Button(content_frame, text="Redo", command=self._on_redo_click, bootstyle="info")
+            btn_redo = Button(content_frame, text="Redo", command=self._on_redo_click, bootstyle="info", image=self.redo_icon, compound="left")
             btn_redo.pack(fill="x", pady=2)
 
-            tab.btn_segment = Button(content_frame, text="Segment Image", command=self._segment_image, bootstyle="success")
+            tab.btn_segment = Button(content_frame, text="Segment Image", command=self._segment_image, bootstyle="success", image=self.segment_icon, compound="left")
             tab.btn_segment.pack(fill="x", pady=5)
 
-            tab.btn_export_view = ttk.Button(content_frame, text="Export View with Segmentation Mask", command=self._export_view_with_mask)
+            tab.btn_export_view = ttk.Button(content_frame, text="Export View with Segmentation Mask", command=self._export_view_with_mask, image=self.export_icon, compound="left")
             tab.btn_export_view.pack(fill="x", pady=2)
             # automated multiresolution segmentation button
             tab.btn_auto_seg = ttk.Button(
