@@ -649,12 +649,24 @@ class MainView(tk.Tk):
         fig.clf()  # Clear current figure
         ax = fig.add_subplot(111, projection='3d')
 
-        downsample_factor = 0.85 # Downsample factor for faster rendering
+        downsample_factor = 0.5 # Downsample factor for faster rendering
 
         for obj_id, combined_mesh in combined_meshes.items():
             downsampled = ndimage.zoom(combined_mesh, zoom=downsample_factor, order=0)
             verts, faces, _, _ = measure.marching_cubes(downsampled, level=0.5) # faster, optimised version of measure.marching_cubes
             verts = verts / downsample_factor  # Rescale to original dimensions
+            
+            try:
+                import trimesh
+                mesh = trimesh.base.Trimesh(vertices=verts, faces=faces)
+                # set the target face count
+                target_faces = max(100, len(faces) // 2)
+                simplified_mesh = mesh.simplify_quadric_decimation(face_count=target_faces)
+                verts = simplified_mesh.vertices
+                faces = simplified_mesh.faces
+            except Exception as e:
+                print(f"Mesh optimisation failed, continuing without optimising: {e}")
+
             base_color = self.pointer_color_mapping.get(obj_id, "red")
             ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], color=base_color, alpha=0.7)
         
