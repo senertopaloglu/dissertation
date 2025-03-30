@@ -60,9 +60,9 @@ class StdoutCapture:
         self.original_stdout.flush()
 
 class ProgressDialog:
-    def __init__(self, master):
+    def __init__(self, master, title="Progress"):
         self.top = tk.Toplevel(master)
-        self.top.title("Progress")
+        self.top.title(title)
         self.top.geometry("300x250")
         self.top.grab_set() # make progress dialog modal
 
@@ -324,7 +324,7 @@ class SegmentationController:
         if hasattr(self.view, "sagittal_view") and hasattr(self.view.sagittal_view.canvas, "show_points_checkbox"):
             self.view.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
-    def segment_image(self, slices, points, frame_idx, axis_str_suffix, custom_filename=None, completion_callback=None, downsampled=False, multi_resolution=False, is_first=False, is_final=False):
+    def segment_image(self, slices, points, frame_idx, axis_str_suffix, custom_filename=None, completion_callback=None, downsampled=False, multi_resolution=False, is_first=False, is_final=False, progress_title=None):
         """
         Calls the model to segment the image based on the user's clicks.
         """
@@ -383,12 +383,12 @@ class SegmentationController:
                 points_grouped[k] = []
             points_grouped[k].append((int(x), int(y), int(pos_flag)))
         
-        self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback, multi_resolution, is_first, is_final)
+        self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback, multi_resolution, is_first, is_final, progress_title)
     
-    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None, multi_resolution=False, is_first=False, is_final=False):
+    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None, multi_resolution=False, is_first=False, is_final=False, progress_title=None):
         import modal_handler
         # create progress dialog as a child of the main view
-        progress_dialog = ProgressDialog(self.view)
+        progress_dialog = ProgressDialog(self.view, title=progress_title if progress_title is not None else "Progress")
         progress_dialog.top.transient(self.view)
         progress_dialog.update_progress() # start polling the progress queue
 
@@ -546,7 +546,8 @@ class SegmentationController:
                 downsampled=True,
                 multi_resolution=True,
                 is_first=is_first,
-                is_final=is_final
+                is_final=is_final,
+                progress_title=f"Progress {resolution}x{resolution}"
             )
 
             def check_result():
