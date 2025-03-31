@@ -11,6 +11,8 @@ from ttkbootstrap import Window, Frame, Label, Button, Notebook, OptionMenu, Sca
 from tkinter import messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import trimesh
 import scipy.ndimage as ndimage
@@ -24,6 +26,10 @@ try:
     import nibabel as nib
 except ImportError:
     nib = None
+
+class CustomNavigationToolbar2Tk(NavigationToolbar2Tk):
+    # Remove the 'Save' tool from the toolbar
+    toolitems = [item for item in NavigationToolbar2Tk.toolitems if item[0] != 'Save']
 
 class MainView(Window):
     """
@@ -79,6 +85,8 @@ class MainView(Window):
         # Sidebar + main frames
         self.sidebar = Frame(self, padding=10)
         self.sidebar.grid(row=0, column=0, rowspan=2, sticky="nsew")
+
+        plt.ion()  # Enable interactive mode for matplotlib
 
         # Build the UI
         self._build_sidebar()
@@ -360,10 +368,17 @@ class MainView(Window):
         control_frame = Frame(content_frame)
         control_frame.pack(side="top", fill="x", pady=5)
 
-        fig, ax = plt.subplots(figsize=(4,4))
+        fig = Figure(figsize=(4,4))
+        ax = fig.add_subplot(111)
         canvas = FigureCanvasTkAgg(fig, master=content_frame)
         canvas.tab_index = axis
+        widget = canvas.get_tk_widget()
         canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
+
+        toolbar = CustomNavigationToolbar2Tk(canvas, control_frame)
+        toolbar.update()
+        toolbar.pack(side="bottom", fill="x")
+        canvas.toolbar = toolbar
 
         outer_frame.canvas = canvas
         canvas.axis = axis
@@ -451,7 +466,8 @@ class MainView(Window):
         label.pack(pady=(5,0))
         outer_frame.label = label
 
-        fig, ax = plt.subplots(figsize=(4,4))
+        fig = Figure(figsize=(4,4))
+        ax = fig.add_subplot(111, projection='3d')
         canvas = FigureCanvasTkAgg(fig, master=content_frame)
         canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
         
@@ -469,10 +485,19 @@ class MainView(Window):
             return
         
         slice_index = int(float(val))
+        # capture current zoom limits to keep them as the underlying slice changes
+        current_xlim = ax.get_xlim()
+        current_ylim = ax.get_ylim()
+
         slice_array = self._slice_request_callback(axis, slice_index)
         ax.clear()
         ax.imshow(slice_array, cmap='gray')
         ax.set_title(f"{text} - Slice {slice_index}")
+
+        # restore zoom limits
+        if current_xlim != (0.0, 1.0) and current_ylim != (0.0, 1.0):
+            ax.set_xlim(current_xlim)
+            ax.set_ylim(current_ylim)
 
         if canvas.show_mask_var.get():
             if axis == 0:
@@ -615,6 +640,14 @@ class MainView(Window):
         """
         if event.inaxes is None:
             return
+
+        # Do not register pointer clicks if a zoom/pan tool is active.
+        if hasattr(canvas, "toolbar") and canvas.toolbar.mode != "":
+            return
+        
+        # return if user has clicked on an empty plot
+        if not hasattr(canvas, "slider"):
+            return
         
         self.last_used_axis = ax.get_title()
         self.last_used_slice_index = int(canvas.slider.get())
@@ -625,7 +658,7 @@ class MainView(Window):
             current_tab = self.tabs[active_index]
             color = current_tab.pointer_color_var.get() if current_tab.pointer_color_var else "Red"
             
-            self._on_click_callback(event, color)
+            self._on_click_callback(event, color, ax)
 
         # Redraw after any changes
         canvas.draw()

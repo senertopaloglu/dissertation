@@ -17,7 +17,7 @@ CONTAINER_PREP_ETA = 210
 import matplotlib.colors as mcolors
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 
 from dicom_to_nifti import DicomToNifti
 
@@ -195,7 +195,7 @@ class SegmentationController:
         """
         return self.model.get_slice(axis, slice_index)
 
-    def on_click(self, event, pointer_color):
+    def on_click(self, event, pointer_color, ax):
         """
         Callback for mouse clicks on the matplotlib canvas.
         This is where we record the point location and update the view.
@@ -227,7 +227,7 @@ class SegmentationController:
 
         # Update the View
         self.view.add_point_to_listbox(x, y, pos_flag, active_index=active_index)
-        line = self.view.plot_point(x, y, color)
+        line = self.view.plot_point(x, y, color, ax)
         current_tab.line_objects.append(line)
 
         # update the state of the pos_click_checkbox based on points for the current color.
