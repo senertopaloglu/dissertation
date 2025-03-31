@@ -56,6 +56,19 @@ class MainView(Window):
             10: "gray"
         }
 
+        self.color_obj_id_mapping = {
+            "red": 1,
+            "blue": 2,
+            "green": 3,
+            "orange": 4,
+            "purple": 5,
+            "cyan": 6,
+            "magenta": 7,
+            "teal": 8,
+            "black": 9,
+            "gray": 10
+        }
+
         # Keep references to callback functions
         self._on_click_callback = None
         self._undo_callback = None
@@ -535,38 +548,69 @@ class MainView(Window):
             print("No slice selected for segmentation.")
             return
         
-        active_index = self.tabControl.index("current")
-        current_tab = self.tabs[active_index]
-
-        if active_index == 0:
-            axis = 0
-            axis_str_suffix = "AXIAL"
-            frame_idx = int(self.axial_view.canvas.slider.get())
-            slice_array = self._slice_request_callback(axis, frame_idx)
-        elif active_index == 1:
-            axis = 1
-            axis_str_suffix = "CORONAL"
-            frame_idx = int(self.coronal_view.canvas.slider.get())
-            slice_array = self._slice_request_callback(axis, frame_idx)
-        elif active_index == 2:
-            axis = 2
-            axis_str_suffix = "SAGITTAL"
-            frame_idx = int(self.sagittal_view.canvas.slider.get())
-            slice_array = self._slice_request_callback(axis, frame_idx)
+        if self.global_segmentation_var.get():
+            points = {}
+            
+            for i, tab in enumerate(self.tabs):
+                for point in tab.points:
+                    print(point)
+                    x, y, color, pos_flag = point
+                    obj_id = self.color_obj_id_mapping.get(color, 1)
+                    if i == 0:
+                        curr_slice = int(self.axial_view.canvas.slider.get())
+                        if obj_id not in points:
+                            points[obj_id] = defaultdict(list)
+                        points[obj_id][curr_slice].append((int(x), int(y), int(pos_flag)))
+                    elif i == 1:
+                        curr_slice = int(self.coronal_view.canvas.slider.get())
+                        if obj_id not in points:
+                            points[obj_id] = defaultdict(list)
+                        points[obj_id][int(y)].append((int(x), curr_slice, int(pos_flag)))
+                    elif i == 2:
+                        curr_slice = int(self.sagittal_view.canvas.slider.get())
+                        if obj_id not in points:
+                            points[obj_id] = defaultdict(list)
+                        points[obj_id][int(y)].append((curr_slice, int(x), int(pos_flag)))  
+             
+            print(points)
+            print("*" * 100)
+            for k, v in points.items():
+                for a, b in v.items():
+                    print(f"{k}|{a}|{b}")
+            self.controller.segment_image(self._slice_request_callback(0, 1), points, int(self.axial_view.canvas.slider.get()), "AXIAL", is_final=True, is_global=True)
         else:
-            raise ValueError("Invalid axis string.")
-            return
-        
-        points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
+            active_index = self.tabControl.index("current")
+            current_tab = self.tabs[active_index]
 
-        for idx, entry in enumerate(current_tab.points_listbox.get(0, 'end')):
-            pos_flag = 1 if "Positive click" in entry else 0
-            x, y = entry.split(' at ')[-1].strip('()').split(',')
-            color = current_tab.points_listbox.itemcget(idx, "fg")
-            obj_id = self.pointer_color_mapping.get(color, 1)
-            points[obj_id].append((int(x), int(y), int(pos_flag)))
+            if active_index == 0:
+                axis = 0
+                axis_str_suffix = "AXIAL"
+                frame_idx = int(self.axial_view.canvas.slider.get())
+                slice_array = self._slice_request_callback(axis, frame_idx)
+            elif active_index == 1:
+                axis = 1
+                axis_str_suffix = "CORONAL"
+                frame_idx = int(self.coronal_view.canvas.slider.get())
+                slice_array = self._slice_request_callback(axis, frame_idx)
+            elif active_index == 2:
+                axis = 2
+                axis_str_suffix = "SAGITTAL"
+                frame_idx = int(self.sagittal_view.canvas.slider.get())
+                slice_array = self._slice_request_callback(axis, frame_idx)
+            else:
+                raise ValueError("Invalid axis string.")
+                return
+            
+            points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
 
-        self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix, is_final=True)
+            for idx, entry in enumerate(current_tab.points_listbox.get(0, 'end')):
+                pos_flag = 1 if "Positive click" in entry else 0
+                x, y = entry.split(' at ')[-1].strip('()').split(',')
+                color = current_tab.points_listbox.itemcget(idx, "fg")
+                obj_id = self.color_obj_id_mapping.get(color, 1)
+                points[obj_id].append((int(x), int(y), int(pos_flag)))
+
+            self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix, is_final=True, is_global=False)
     
     def show_image(self):
         self._build_image_frames()

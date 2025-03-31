@@ -336,7 +336,7 @@ class SegmentationController:
         if hasattr(self.view, "sagittal_view") and hasattr(self.view.sagittal_view.canvas, "show_points_checkbox"):
             self.view.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
-    def segment_image(self, slices, points, frame_idx, axis_str_suffix, custom_filename=None, completion_callback=None, downsampled=False, multi_resolution=False, is_first=False, is_final=False, progress_title=None):
+    def segment_image(self, slices, points, frame_idx, axis_str_suffix, custom_filename=None, completion_callback=None, downsampled=False, multi_resolution=False, is_first=False, is_final=False, progress_title=None, is_global=False):
         """
         Calls the model to segment the image based on the user's clicks.
         """
@@ -370,34 +370,10 @@ class SegmentationController:
 
         # Step 4: Delete local JPG folder and contents
         shutil.rmtree(local_folder)
-
-        points_grouped = {}
-        color_map = {
-            "red": 1,
-            "blue": 2,
-            "green": 3,
-            "orange": 4,
-            "purple": 5,
-            "cyan": 6,
-            "magenta": 7,
-            "teal": 8,
-            "black": 9,
-            "gray": 10
-        }
-        active_index = self.view.tabControl.index("current")
-        current_tab = self.view.tabs[active_index]
-        for idx, entry in enumerate(current_tab.points_listbox.get(0,'end')):
-            pos_flag = 1 if "Positive click" in entry else 0
-            x, y = entry.split(' at ')[-1].strip('()').split(',')
-            color = current_tab.points_listbox.itemcget(idx, "fg")
-            k = color_map.get(color.lower(), 1)
-            if k not in points_grouped:
-                points_grouped[k] = []
-            points_grouped[k].append((int(x), int(y), int(pos_flag)))
         
-        self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback, multi_resolution, is_first, is_final, progress_title)
+        self.run_segmentation_with_progress(slices, points, frame_idx, axis_str_suffix, foldername, completion_callback, multi_resolution, is_first, is_final, progress_title, is_global)
     
-    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None, multi_resolution=False, is_first=False, is_final=False, progress_title=None):
+    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None, multi_resolution=False, is_first=False, is_final=False, progress_title=None, is_global=False):
         import modal_handler
         # create progress dialog as a child of the main view
         progress_dialog = ProgressDialog(self.view, title=progress_title if progress_title is not None else "Progress")
@@ -410,7 +386,7 @@ class SegmentationController:
             try:
                 # redirect stdout to capture progress messages
                 with contextlib.redirect_stdout(capture):
-                    video_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final)
+                    video_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
                     # signal completion
                     progress_dialog.progress_queue.put(("done", 100))
                 # once segmentation finished, update the view on the main thread

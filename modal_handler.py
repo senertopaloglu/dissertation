@@ -56,7 +56,7 @@ def show_points(coords, labels, ax, marker_size=200):
     ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
 
 @app.function(gpu="L4", image=image, volumes={"/root/temp":vol}, timeout=1000, mounts=[])
-def do_some_magic(points, frame_idx, foldername, multi_resolution, is_first, is_final):
+def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, is_final, is_global):
     import subprocess
 
     # output = subprocess.check_output(["nvidia-smi"], text=True)
@@ -66,6 +66,10 @@ def do_some_magic(points, frame_idx, foldername, multi_resolution, is_first, is_
     # print(cwd)
     # print(os.listdir(cwd))
     
+    print("#" * 30)
+    print(f"points : {points_np}")
+    print("#" * 30)
+
     os.chdir(os.path.expanduser("temp/SAM_2_Medical_3D"))
 
     venv_dir = "venv"
@@ -120,6 +124,8 @@ def do_some_magic(points, frame_idx, foldername, multi_resolution, is_first, is_
     # print(sys.path)
     # print("*****")
 
+    print(frame_idx)
+
     from sam2.build_sam import build_sam2_video_predictor
     sam2_checkpoint = "./sam2_hiera_large.pt"
     model_cfg = "sam2_hiera_l.yaml"
@@ -145,27 +151,54 @@ def do_some_magic(points, frame_idx, foldername, multi_resolution, is_first, is_
 
     prompts = {}  # hold all the clicks we add for visualization
 
-    ann_frame_idx = frame_idx  # the frame index we interact with TODO: set = frame_idx (parameter)
+    if not is_global:
+        ann_frame_idx = frame_idx  # the frame index of the annotation
+    else:
+        ann_frame_idx = None
 
-    for k,v in points.items():
+    for k,v in points_np.items():
         ann_obj_id = k
-        points = [[x[0], x[1]] for x in v]
-        labels = [x[2] for x in v]
-        points = np.array(points, dtype=np.float32)
-        labels = np.array(labels, np.int32)
-        prompts[ann_obj_id] = points, labels
-        _, out_obj_ids, out_mask_logits = predictor.add_new_points(
-            inference_state=inference_state,
-            frame_idx=ann_frame_idx,
-            obj_id=ann_obj_id,
-            points=points,
-            labels=labels,
-        )
+        points = []
+        labels = []
+        if is_global:
+            for f_index, v in v.items():
+                if ann_frame_idx is None:
+                    ann_frame_idx = f_index
+                else:
+                    ann_frame_idx = max(ann_frame_idx, f_index)
+                points.extend([[x[0], x[1]] for x in v])
+                labels.extend([x[2] for x in v])
+                print(points)
+                print(labels)
+                points_np = np.array(points, dtype=np.float32)
+                labels_np = np.array(labels, np.int32)
+                prompts[ann_obj_id] = points_np, labels_np
+                _, out_obj_ids, out_mask_logits = predictor.add_new_points(
+                    inference_state=inference_state,
+                    frame_idx=ann_frame_idx,
+                    obj_id=ann_obj_id,
+                    points=points_np,
+                    labels=labels_np,
+                )
+        else:
+            points = [[x[0], x[1]] for x in v]
+            labels = [x[2] for x in v]
+            points_np = np.array(points, dtype=np.float32)
+            labels_np = np.array(labels, np.int32)
+            prompts[ann_obj_id] = points_np, labels_np
+            _, out_obj_ids, out_mask_logits = predictor.add_new_points(
+                inference_state=inference_state,
+                frame_idx=ann_frame_idx,
+                obj_id=ann_obj_id,
+                points=points_np,
+                labels=labels_np,
+            )
 
     if is_final:
         # run propagation throughout the video and collect the results in a dict
         # prop forwards
-        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+        print(ann_frame_idx)
+        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx):
             video_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
@@ -188,14 +221,14 @@ def do_some_magic(points, frame_idx, foldername, multi_resolution, is_first, is_
 
     return video_segments
 
-def segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final):
+def segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global=False):
     """
     segmentation functionality.
     """
     # print(app.name)
     with modal.enable_output():
         with app.run():
-            video_segments=do_some_magic.remote(points, frame_idx, foldername, multi_resolution, is_first, is_final)
+            video_segments=do_some_magic.remote(points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
     # video_dir = f"./{foldername}"
     # vis_frame_stride = 15
     # frame_names = [
