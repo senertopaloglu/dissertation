@@ -56,7 +56,6 @@ class MainView(Window):
             10: "gray"
         }
 
-
         # Keep references to callback functions
         self._on_click_callback = None
         self._undo_callback = None
@@ -79,6 +78,8 @@ class MainView(Window):
         # Sidebar + main frames
         self.sidebar = Frame(self, padding=10)
         self.sidebar.grid(row=0, column=0, rowspan=2, sticky="nsew")
+
+        self.global_segmentation_var = ttk.BooleanVar(value=True)
 
         # Build the UI
         self._build_sidebar()
@@ -287,6 +288,14 @@ class MainView(Window):
 
             btn_redo = Button(undo_redo_frame, text="Redo", command=self._on_redo_click, bootstyle="info", image=self.redo_icon, compound="left")
             btn_redo.grid(row=0, column=1, sticky="ew")
+
+            tab.global_segmentation_checkbox = Checkbutton(
+                content_frame,
+                text="Global view segmentation\n(show on axial view)",
+                variable=self.global_segmentation_var,
+                state="disabled"  # disabled by default
+            )
+            tab.global_segmentation_checkbox.pack(fill="x", pady=2)
 
             tab.btn_segment = Button(content_frame, text="Segment Image", command=self._segment_image, image=self.segment_icon, compound="left", style="DarkGreen.TButton")
             tab.btn_segment.pack(fill="x", pady=2)
@@ -659,6 +668,8 @@ class MainView(Window):
             print(f"Could not set item color: {e}")
         current_tab.points_listbox.yview_moveto(1.0)
 
+        self.update_global_segmentation_state()
+
         if active_index==0:
             self.axial_view.canvas.show_points_checkbox.config(state="normal")
         if active_index==1:
@@ -678,6 +689,8 @@ class MainView(Window):
                 self.coronal_view.canvas.show_points_checkbox.config(state="disabled")
             elif active_index == 2:
                 self.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
+
+        self.update_global_segmentation_state()
 
     def clear_listbox(self):
         active_index = self.tabControl.index("current")
@@ -1002,6 +1015,13 @@ class MainView(Window):
         self.mesh_view.label.configure(text="Segmentation Result (3D Mesh View)")
         ax.set_title("3D Mesh View")
         self.mesh_view.canvas.draw()
+    
+    def update_global_segmentation_state(self):
+        # Enable if any tab contains at least one point; else disable.
+        enable = any(tab.points for tab in self.tabs)
+        state = "normal" if enable else "disabled"
+        for tab in self.tabs:
+            tab.global_segmentation_checkbox.config(state=state)
 
     def _on_close(self):
         """
