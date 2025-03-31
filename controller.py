@@ -17,7 +17,7 @@ CONTAINER_PREP_ETA = 210
 import matplotlib.colors as mcolors
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 
 from dicom_to_nifti import DicomToNifti
 
