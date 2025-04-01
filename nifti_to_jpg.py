@@ -21,16 +21,19 @@ def nifti_to_jpg(nifti_path, output_folder, axis, downsampled=False):
     os.makedirs(output_folder, exist_ok=True)
 
     axis_lower = axis.lower()
-    if axis_lower == 'axial':
-        slice_axis = 2
-    elif axis_lower == 'coronal':
-        slice_axis = 1
-    elif axis_lower == 'sagittal':
+    if downsampled:
         slice_axis = 0
     else:
-        print(f"Axis '{axis}' not implemented. Defaulting to axial slices.")
-        slice_axis = 2
-        axis_lower = 'axial'
+        if axis_lower == 'axial':
+            slice_axis = 2
+        elif axis_lower == 'coronal':
+            slice_axis = 1
+        elif axis_lower == 'sagittal':
+            slice_axis = 0
+        else:
+            print(f"Axis '{axis}' not implemented. Defaulting to axial slices.")
+            slice_axis = 2
+            axis_lower = 'axial'
 
     # Iterate through each slice
     for i in range(data.shape[slice_axis]):
