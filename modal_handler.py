@@ -31,9 +31,9 @@ image = (
         "pip install torch torchvision torchaudio --no-build-isolation --index-url https://download.pytorch.org/whl/cu121"
     )
 )
-vol = modal.Volume.from_name("sam_2_medical_3d")
+vol = modal.Volume.from_name("my_adapted_sam_2_medical_3d")
 
-app = modal.App("example-3")
+app = modal.App("adapted-example-3")
 
 
 
@@ -81,6 +81,8 @@ def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, 
     if venv_site not in sys.path:
         site.addsitedir(venv_site)
 
+    #subprocess.call([venv_python, "-m", "pip", "install", "--no-build-isolation", "-e", "."])
+    #subprocess.call([venv_python, "-m", "pip", "install", "-e", ".[demo]"])
 
     if multi_resolution and is_first:
         try:
@@ -91,7 +93,7 @@ def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, 
         try:
             subprocess.call([venv_python, '-m', 'pip', 'show', ".[demo]"])
         except subprocess.CalledProcessError as e:
-            subprocess.call([sys.executable, '-m', 'pip', 'install', '--prefer-binary', '--no-build-isolation', "-e", ".[demo]"])
+            subprocess.call([venv_python, '-m', 'pip', 'install', '--prefer-binary', '--no-build-isolation', "-e", ".[demo]"])
 
     torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
     if torch.cuda.get_device_properties(0).major >= 8:
@@ -112,6 +114,9 @@ def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, 
     # #sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
     current_directory = os.getcwd()
+    os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + os.pathsep + current_directory 
+    if current_directory not in sys.path:
+        sys.path.append(current_directory)
     if multi_resolution and is_first:
         os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + os.pathsep + current_directory 
 
@@ -165,7 +170,7 @@ def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, 
                 if ann_frame_idx is None:
                     ann_frame_idx = f_index
                 else:
-                    ann_frame_idx = max(ann_frame_idx, f_index)
+                    ann_frame_idx = min(ann_frame_idx, f_index)
                 points.extend([[x[0], x[1]] for x in v])
                 labels.extend([x[2] for x in v])
                 print(points)
@@ -175,7 +180,7 @@ def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, 
                 prompts[ann_obj_id] = points_np, labels_np
                 _, out_obj_ids, out_mask_logits = predictor.add_new_points(
                     inference_state=inference_state,
-                    frame_idx=ann_frame_idx,
+                    frame_idx=f_index,
                     obj_id=ann_obj_id,
                     points=points_np,
                     labels=labels_np,
