@@ -958,7 +958,7 @@ class MainView(Window):
 
         composite_slices = []
 
-        grayscale_mapping = {1: 63, 2: 252, 3: 189, 4: 126}
+        grayscale_mapping = {1: 63, 2: 252, 3: 189, 4: 126, 5: 111, 6: 96, 7: 71, 8: 56, 9: 41, 10: 26}
 
         for i in range(num_slices):
             # get the correct original slice for the orientation.
@@ -993,8 +993,7 @@ class MainView(Window):
 
             # if a segmentation mask exists for this slice, overlay each object. 
             if i in mask_dict:
-                for obj_id, mask in mask_dict[i].items():
-                    
+                for obj_id, mask in sorted(mask_dict[i].items(), key=lambda item: item[0]):
                     if active_index == 2:
                         mask = np.squeeze(mask.astype(np.float32))
                         mask = np.rot90(mask, k=-1)
