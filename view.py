@@ -907,7 +907,7 @@ class MainView(Window):
 
         # Create a radio button for each enum option.
         for fmt in ExportFormat:
-            rb = tk.Radiobutton(popup, text=str(fmt), variable=export_var, value=fmt.value)
+            rb = ttk.Radiobutton(popup, text=str(fmt), variable=export_var, value=fmt.value)
             rb.pack(anchor="w", padx=20)
 
         def on_confirm():
@@ -916,7 +916,7 @@ class MainView(Window):
             popup.destroy()
             self._export_view_with_mask_process(chosen_format)
             
-        confirm_button = ttk.Button(popup, text="OK", command=on_confirm)
+        confirm_button = ttk.Button(popup, text="OK", command=on_confirm, bootstyle="info")
         confirm_button.pack(pady=10)
         
     def _export_view_with_mask_process(self, chosen_format: ExportFormat):
