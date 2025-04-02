@@ -1,44 +1,27 @@
 import os
-from enum import Enum
 from collections import defaultdict
 
-import tkinter.filedialog as filedialog
+from export_format import ExportFormat
 
 import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap import Window, Frame, Label, Button, Notebook, OptionMenu, Scale, Checkbutton
 
-from tkinter import messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-import trimesh
+import matplotlib.colors as mcolors
+
 import scipy.ndimage as ndimage
 
 import numpy as np
+
 from skimage import measure
-from mpl_toolkits.mplot3d import Axes3D 
-import matplotlib.colors as mcolors
 
 try:
     import nibabel as nib
 except ImportError:
     nib = None
 
-class ExportFormat(Enum):
-    BINARY = "binary"
-    GRAYSCALE = "grayscale"
-    RGB = "rgb"
-
-    def __str__(self):
-        # Allows nicer labels in radio buttons if needed
-        if self == ExportFormat.BINARY:
-            return "Binary (suitable for single object segmentation only)"
-        elif self == ExportFormat.GRAYSCALE:
-            return "Grayscale"
-        elif self == ExportFormat.RGB:
-            return "RGB"
-        return self.value
 
 class MainView(Window):
     """
@@ -514,7 +497,7 @@ class MainView(Window):
         """
         Opens a file dialog to select a .nii file and loads it.
         """
-        file_path = filedialog.askopenfilename(
+        file_path = tk.filedialog.askopenfilename(
             title="Select a NIfTI file",
             filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")]
         )
