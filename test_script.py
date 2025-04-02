@@ -3,7 +3,9 @@ import re
 import argparse
 import numpy as np
 from PIL import Image
-from metrics import dice_coefficient  # ensure this function is defined
+import glob
+import cv2
+from metrics import dice_coefficient, new_assd, DICE
 
 def load_mask(filepath):
     """
@@ -18,6 +20,17 @@ def load_mask(filepath):
     # Binarize: consider any nonzero pixel as foreground.
     return (data > 0).astype(np.uint8)
 
+def png_series_reader(dir):
+    V = []
+    png_file_list=glob.glob(dir + '/*.png')
+    png_file_list.sort()
+    for filename in png_file_list: 
+        image = cv2.imread(filename,0)
+        V.append(image)
+    V = np.array(V,order='A')
+    V = V.astype(bool)
+    return V
+
 def main():
     parser = argparse.ArgumentParser(
         description="Test segmentation using folders of PNG images and compute the DICE metric."
@@ -25,7 +38,12 @@ def main():
     parser.add_argument("--input_dir", required=True, help="Folder containing segmentation PNG images.")
     parser.add_argument("--ground_truth_dir", required=True, help="Folder containing ground truth PNG images.")
     parser.add_argument("--modality", required=True, choices=['CT', 'MR'], help="Folder containing ground truth PNG images.")
+    parser.add_argument("--dicom_dir", required=True, help="Folder containing DICOM images.")
     args = parser.parse_args()
+
+    #####################################
+    ######### DICE COEFFICIENT ##########
+    #####################################
 
     # List PNG files in each folder; assuming filenames match between folders.
     input_files = sorted([f for f in os.listdir(args.input_dir) if f.lower().endswith('.png')])
@@ -78,6 +96,28 @@ def main():
         print(f"Average DICE Coefficient over {count} slices: {total_dice/count}")
     else:
         print("No matching files to compare.")
+
+    ######################################
+    ################ SETUP ###############
+    ######################################
+
+    Vref = png_series_reader(args.ground_truth_dir)
+    Vseg = png_series_reader(args.input_dir)
+
+    ######################################
+    ########### DICE COEFFICIENT #########
+    ######################################
+
+    dice_score = DICE(Vref, Vseg)
+    print(f"DICE: {dice_score}")
+
+    ######################################
+    ############## ASSD ##################
+    ######################################
+
+    assd = new_assd(Vref, Vseg, args.dicom_dir)
+    print(f"ASSD: {assd}")
+    
 
 if __name__ == '__main__':
     main()
