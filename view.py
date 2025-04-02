@@ -1,5 +1,5 @@
 import os
-
+from enum import Enum
 from collections import defaultdict
 
 import tkinter.filedialog as filedialog
@@ -24,6 +24,21 @@ try:
     import nibabel as nib
 except ImportError:
     nib = None
+
+class ExportFormat(Enum):
+    BINARY = "binary"
+    GRAYSCALE = "grayscale"
+    RGB = "rgb"
+
+    def __str__(self):
+        # Allows nicer labels in radio buttons if needed
+        if self == ExportFormat.BINARY:
+            return "Binary (suitable for single object segmentation only)"
+        elif self == ExportFormat.GRAYSCALE:
+            return "Grayscale"
+        elif self == ExportFormat.RGB:
+            return "RGB"
+        return self.value
 
 class MainView(Window):
     """
@@ -302,7 +317,7 @@ class MainView(Window):
             )
             tab.btn_auto_seg.pack(fill="x", pady=2)
 
-            tab.btn_export_view = ttk.Button(content_frame, text="Export View with\nSegmentation Mask", command=self._export_view_with_mask, image=self.export_icon, compound="left", style="DarkGrey.TButton")
+            tab.btn_export_view = ttk.Button(content_frame, text="Export View with\nSegmentation Mask", command=lambda: self._export_view_with_mask(), image=self.export_icon, compound="left", style="DarkGrey.TButton")
             tab.btn_export_view.pack(fill="x", pady=2)
             
 
@@ -879,6 +894,37 @@ class MainView(Window):
         """
         Exports the original image with overlayed segmentation mask in the active view
         as a 3D NIfTI file.
+        Presents a popup using radio buttons (with an Enum) for user export format selection.
+        """
+        popup = tk.Toplevel(self)
+        popup.title("Choose Export Color Format")
+        popup.transient(self)
+
+        instruction_label = tk.Label(popup, text="Select export format for the exported view:")
+        instruction_label.pack(pady=10)
+
+        export_var = tk.StringVar(value=ExportFormat.BINARY.value)
+
+        # Create a radio button for each enum option.
+        for fmt in ExportFormat:
+            rb = tk.Radiobutton(popup, text=str(fmt), variable=export_var, value=fmt.value)
+            rb.pack(anchor="w", padx=20)
+
+        def on_confirm():
+            # Convert the selected value to an enum instance.
+            chosen_format = ExportFormat(export_var.get())
+            popup.destroy()
+            self._export_view_with_mask_process(chosen_format)
+            
+        confirm_button = ttk.Button(popup, text="OK", command=on_confirm)
+        confirm_button.pack(pady=10)
+        
+    def _export_view_with_mask_process(self, chosen_format: ExportFormat):
+        """
+        Carries out the export process using the chosen format:
+          - BINARY: Convert composite volume to binary image.
+          - GRAYSCALE: Convert composite volume to a weighted grayscale image.
+          - RGB: Retain the composite volume as is.
         """
         alpha = 0.4
 
@@ -890,12 +936,14 @@ class MainView(Window):
                 return
             original_np = np.asarray(self.model.image)
             mask_dict = self.axial_view_mask
+            num_slices = original_np.shape[0]
         elif active_index == 1:
             if self.coronal_view_mask is None:
                 tk.messagebox.showerror("Export Error", "No segmentation mask available for coronal view.")
                 return
             original_np = np.asarray(self.model.image)  # Expect shape (Z, H, W)
             mask_dict = self.coronal_view_mask
+            num_slices = original_np.shape[1]
         elif active_index == 2:
             # Sagittal view: slices along axis 2
             if self.sagittal_view_mask is None:
@@ -903,34 +951,45 @@ class MainView(Window):
                 return
             original_np = np.asarray(self.model.image)  # Expect shape (Z, H, W)
             mask_dict = self.sagittal_view_mask
+            num_slices = original_np.shape[2]
         else:
             tk.messagebox.showerror("Export Error", "Invalid view selected.")
             return
-        
-        sizes = self.model.image.GetLargestPossibleRegion().GetSize()
-        dim = 2 if active_index == 0 else 1 if active_index == 1 else 0
-        max_slice = sizes[dim] - 1
 
         composite_slices = []
-        for i in range(max_slice + 1):
-            # get the correct original slice for the orientation.
-            orig_slice = self._slice_request_callback(active_index, i)
 
-            if active_index == 2:
+        grayscale_mapping = {1: 63, 2: 252, 3: 189, 4: 126}
+
+        for i in range(num_slices):
+            # get the correct original slice for the orientation.
+            if active_index == 0:
+                # axial view: slices along axis 0
+                orig_slice = original_np[i, :, :]
+            elif active_index == 1:
+                # coronal view: slices along axis 1
+                orig_slice = original_np[:, i, :]
+            elif active_index == 2:
+                # sagittal view: slices along axis 2
+                orig_slice = original_np[:, :, i]
                 orig_slice = np.rot90(orig_slice, k=-1)
                 orig_slice = np.fliplr(orig_slice)
 
+            # normalise original slice to 0-255
             slice_min, slice_max = orig_slice.min(), orig_slice.max()
             if slice_max > slice_min:  # to avoid divide-by-zero
                 norm_slice = (orig_slice - slice_min) / (slice_max - slice_min)
             else:
                 norm_slice = orig_slice * 0  # all zeros if it's a uniform slice
-            
             norm_slice_255 = (norm_slice * 255).astype(np.uint8)
 
             # convert grayscale to RGB
             rgb = np.stack([norm_slice_255] * 3, axis=-1).astype(np.float32)
-            composite = rgb.copy()
+            
+            # in binary mode, start with a black canvas, else start with original image
+            if chosen_format == ExportFormat.BINARY or chosen_format == ExportFormat.GRAYSCALE:
+                composite = np.zeros_like(rgb)
+            else:
+                composite = rgb.copy()
 
             # if a segmentation mask exists for this slice, overlay each object. 
             if i in mask_dict:
@@ -944,17 +1003,29 @@ class MainView(Window):
                     else:
                         mask_expanded = np.expand_dims(mask.astype(np.float32), axis=-1)
 
-                    # Get pointer color for this object, default to red if missing.
-                    color_name = self.pointer_color_mapping.get(obj_id, "red")
-                    rgb_color = np.array(mcolors.to_rgb(color_name)) * 255
-                    # Prepare an overlay of the pointer color.
-                    overlay = np.zeros_like(composite)
-                    overlay[:, :, 0] = rgb_color[0]
-                    overlay[:, :, 1] = rgb_color[1]
-                    overlay[:, :, 2] = rgb_color[2]
-                    # Alpha blend the overlay where mask is True.
-                    composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
-                composite = np.clip(composite, 0, 255)
+                    if chosen_format == ExportFormat.BINARY:
+                        binary_mask = (mask_expanded > 0).squeeze()
+                        composite[binary_mask] = 255  # Set the mask area to white
+                    elif chosen_format == ExportFormat.GRAYSCALE:
+                        gray_val = grayscale_mapping.get(obj_id, 0)
+                        overlay = np.zeros_like(composite)
+                        overlay[:, :, 0] = gray_val
+                        overlay[:, :, 1] = gray_val
+                        overlay[:, :, 2] = gray_val
+                        composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
+                    else:
+                        # Get pointer color for this object, default to red if missing.
+                        color_name = self.pointer_color_mapping.get(obj_id, "red")
+                        rgb_color = np.array(mcolors.to_rgb(color_name)) * 255
+                        # Prepare an overlay of the pointer color.
+                        overlay = np.zeros_like(composite)
+                        overlay[:, :, 0] = rgb_color[0]
+                        overlay[:, :, 1] = rgb_color[1]
+                        overlay[:, :, 2] = rgb_color[2]
+                        # Alpha blend the overlay where mask is True.
+                        composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
+                if chosen_format != ExportFormat.BINARY:
+                    composite = np.clip(composite, 0, 255)
             
             if composite.ndim == 4 and composite.shape[0] == 1:
                 composite = np.squeeze(composite, axis=0)
