@@ -1,3 +1,4 @@
+from collections import defaultdict
 import sys
 import shutil
 import os
@@ -415,7 +416,7 @@ class SegmentationController:
 
         # get the original image as a numpy array
         axis = self.view.tabs.index(tab)
-        if axis == 0:
+        if axis == 0 or self.view.global_segmentation_var.get():
             slice_idx = int(self.view.axial_view.canvas.slider.get())
             original_image = full_image[slice_idx, :, :]
             original_h, original_w = original_image.shape
@@ -458,15 +459,32 @@ class SegmentationController:
             "gray": 10
         }
         seeds = {}
-        for (x, y, color, pos_flag) in tab.points:
-            obj_id = color_mapping.get(color.lower(), 1)
-            temp_scale_x = int(x * current_res / original_w)
-            temp_scale_y = int(y * current_res / original_h)
-            seeds.setdefault(obj_id, []).append((temp_scale_x, temp_scale_y, pos_flag))
+        if self.view.global_segmentation_var.get():
+            for i, tab in enumerate(self.view.tabs):
+                for point in tab.points:
+                    x, y, color, pos_flag = point
+                    obj_id = color_mapping.get(color.lower(), 1)
+                    temp_scale_x = int(x * current_res / original_w)
+                    temp_scale_y = int(y * current_res / original_h)
+                    curr_slice = int(self.view.axial_view.canvas.slider.get())
+                    if obj_id not in seeds:
+                        seeds[obj_id] = defaultdict(list)
+                    if i == 0:
+                        seeds[obj_id][curr_slice].append((temp_scale_x, temp_scale_y, pos_flag))
+                    elif i == 1:
+                        seeds[obj_id][curr_slice].append((temp_scale_x, curr_slice, pos_flag))
+                    elif i == 2:
+                        seeds[obj_id][curr_slice].append((curr_slice, temp_scale_x, pos_flag))
+        else:
+            for (x, y, color, pos_flag) in tab.points:
+                obj_id = color_mapping.get(color.lower(), 1)
+                temp_scale_x = int(x * current_res / original_w)
+                temp_scale_y = int(y * current_res / original_h)
+                seeds.setdefault(obj_id, []).append((temp_scale_x, temp_scale_y, pos_flag))
 
         # helper: downsample the entire volume for the selected view
         def downsample_volume(res):
-            if axis == 0:
+            if axis == 0 or self.view.global_segmentation_var.get():
                 N = full_image.shape[0]
                 vol = np.zeros((N, res, res), dtype=full_image.dtype)
                 for i in range(N):
@@ -530,15 +548,16 @@ class SegmentationController:
             self.segment_image(
                 downsampled_volume,
                 points,
-                frame_idx=slice_idx,
-                axis_str_suffix=axis_str_suffix,
+                frame_idx=slice_idx if not self.view.global_segmentation_var.get() else int(self.view.axial_view.canvas.slider.get()),
+                axis_str_suffix=axis_str_suffix if not self.view.global_segmentation_var.get() else "AXIAL",
                 custom_filename=temp_filename,
                 completion_callback=completion_callback,
                 downsampled=True,
                 multi_resolution=True,
                 is_first=is_first,
                 is_final=is_final,
-                progress_title=f"Progress {resolution}x{resolution}"
+                progress_title=f"Progress {resolution}x{resolution}",
+                is_global=self.view.global_segmentation_var.get()
             )
 
             def check_result():
@@ -550,9 +569,9 @@ class SegmentationController:
                     
                     os.remove(f"./temp/{temp_filename}_{axis_str_suffix}.nii")
                     
-                    if slice_idx not in video_segments:
-                        messagebox.showerror("Error", f"No segmentation found for slice {slice_idx}.")
-                        return
+                    # if slice_idx not in video_segments:
+                    #     messagebox.showerror("Error", f"No segmentation found for slice {slice_idx}.")
+                    #     return
                     
                     nonlocal upsampled_masks
                     upsampled_masks = {}
@@ -580,15 +599,26 @@ class SegmentationController:
                                 if M["m00"] != 0:
                                     cx = int(M["m10"] / M["m00"])
                                     cy = int(M["m01"] / M["m00"])
-                                    new_seeds[obj_id] = [(cx, cy, 1)]
+                                    if self.view.global_segmentation_var.get():
+                                        # if global segmentation, use the original image size
+                                        cx = int(cx * (original_w / resolution))
+                                        cy = int(cy * (original_h / resolution))
+                                        new_seeds[obj_id] = defaultdict(list)
+                                        new_seeds[obj_id][int(self.view.axial_view.canvas.slider.get())] = [(cx, cy, 1)]
+                                    else:
+                                        new_seeds[obj_id] = [(cx, cy, 1)]
+                                    print("new seeds in m00")
                                 else:
                                     new_seeds[obj_id] = seeds[obj_id]
+                                    print("new seeds in m00 else")
                             else:
                                 # if no contours found then use the original seed
                                 new_seeds[obj_id] = seeds[obj_id]
+                                print("new seeds in contours else")
                         else:
                             # if segmentation mask is not returned then use the original seed
                             new_seeds[obj_id] = seeds[obj_id]
+                            print("new seeds in seg_mask_down else")
                     
                     # for debugging: display new seed in temorary popup figure
                     # plt.figure(figsize=(12, 8))
