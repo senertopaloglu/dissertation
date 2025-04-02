@@ -2,6 +2,7 @@ import os
 from collections import defaultdict
 
 from export_format import ExportFormat
+from sidebar import Sidebar
 
 import tkinter as tk
 import ttkbootstrap as ttk
@@ -34,12 +35,6 @@ class MainView(Window):
         self.model = model
         self.controller = controller
 
-        self.undo_icon = tk.PhotoImage(file=os.path.join("images", "undo.png"))
-        self.redo_icon = tk.PhotoImage(file=os.path.join("images", "redo.png"))
-        self.segment_icon = tk.PhotoImage(file=os.path.join("images", "segment.png"))
-        self.import_icon = tk.PhotoImage(file=os.path.join("images", "import.png"))
-        self.export_icon = tk.PhotoImage(file=os.path.join("images", "export.png"))
-
         # map pointer ID (1-10) to color names
         self.pointer_color_mapping = {
             1: "red",
@@ -53,7 +48,6 @@ class MainView(Window):
             9: "black",
             10: "gray"
         }
-
 
         # Keep references to callback functions
         self._on_click_callback = None
@@ -75,234 +69,11 @@ class MainView(Window):
         self.rowconfigure(1, weight=3)
 
         # Sidebar + main frames
-        self.sidebar = Frame(self, padding=10)
+        self.sidebar = Sidebar(self, self.model, self, self.controller) # Frame(self, padding=10)
         self.sidebar.grid(row=0, column=0, rowspan=2, sticky="nsew")
 
-        # Build the UI
-        self._build_sidebar()
-
         # Behavior for closing
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
-
-    def _build_sidebar(self):
-        """
-        Builds the left sidebar with buttons, color combobox, listbox, etc.
-        """
-        # Buttons
-        btn_import = Button(self.sidebar, text="Import Image", command=self._import_image, bootstyle="primary", image=self.import_icon, compound="left")
-        btn_import.pack(fill="x", pady=5)
-
-        btn_export_style = ttk.Style()
-        btn_export_style.configure("DarkGrey.TButton",
-                                   background="#555555",
-                                   foreground="white",
-                                   bordercolor="#555555",
-                                   borderwidth=0,
-                                   focusthickness=0,
-                                   relief="flat",
-                                   padding=(10,8),
-                                   anchor="center",
-                                   justify="center")
-        btn_export_style.map("DarkGrey.TButton",
-                                background=[("active", "#666666")]) # lighter on hover
-
-        btn_export = Button(self.sidebar, text="Export 3D Mesh Model", command=self._export_3d_mesh, image=self.export_icon, compound="left", style="DarkGrey.TButton")
-        btn_export.pack(fill="x", pady=5)
-
-        style = ttk.Style()
-
-        style.configure(
-            "DarkerTabs.TNotebook",
-            background="white",
-            tabmargins=[2, 5, 2, 0] # extra spacing around tabs
-        )
-
-        # Define how each tab looks
-        style.configure(
-            "DarkerTabs.TNotebook.Tab",
-            background="#DDDDDD",         # darker gray for inactive tabs
-            padding=[10, 4],          # extra space around the tab text
-            font=("TkDefaultFont", 10)
-        )
-
-        # Map the 'selected' state to a different background/foreground
-        style.map(
-            "DarkerTabs.TNotebook.Tab",
-            background=[("selected", "white")],   # light blue background on active tab
-            foreground=[("selected", "black")],      # make the active tab text blue
-        )
-
-        style.configure("DarkGreen.TButton",
-                            background="#006400",       # dark green background
-                            foreground="white",
-                            relief="flat",
-                            borderwidth=0,
-                            padding=(10,8),
-                            anchor="center",
-                            justify="center")
-        style.map("DarkGreen.TButton",
-                  background=[("active", "#228B22")])  # slightly lighter green on hover
-
-        tabControl = Notebook(self.sidebar, style="DarkerTabs.TNotebook")
-        tab1 = Frame(tabControl)
-        tab2 = Frame(tabControl)
-        tab3 = Frame(tabControl)
-
-        tabControl.add(tab1, text="Axial")
-        tabControl.add(tab2, text="Coronal")
-        tabControl.add(tab3, text="Sagittal")
-        tabControl.pack(fill="x", pady=5)
-
-        tabs = [tab1, tab2, tab3]
-
-        self.tabControl = tabControl
-        self.tabs = tabs
-
-        
-
-        for i, tab in enumerate(tabs):
-            tab.style_name = f"PointerColor.TMenubutton.Tab{i}"
-            style.layout(tab.style_name, style.layout("TMenubutton"))
-            tab.pointer_color_var = None
-            tab.pointer_color_optionmenu = None
-            tab.points_listbox = None
-            tab.points = []
-            tab.line_objects = []
-            tab.undo_stack = []
-            tab.redo_stack = []
-
-        for tab in tabs:
-            content_frame = Frame(tab, padding=(10, 5))
-            content_frame.pack(fill="both", expand=True)
-
-            pointer_color_var = ttk.StringVar(value="Red")
-            tab.pointer_color_var = pointer_color_var
-
-            pos_click_var = ttk.BooleanVar(value=True)
-            tab.pos_click_var = pos_click_var
-            pos_click_checkbox = Checkbutton(
-                content_frame,
-                text="Positive Click",
-                variable=pos_click_var
-            )
-            if not self.model.image:
-                pos_click_checkbox.config(state="disabled")
-
-            pos_click_checkbox.pack(pady=(5, 2))
-            tab.pos_click_checkbox = pos_click_checkbox
-
-            pointer_label = Label(content_frame, text="Pointer colour:")
-            pointer_label.pack(pady=(10, 2))
-
-            colors = ["Red", "Blue", "Green", "Orange", "Purple",
-                      "Cyan", "Magenta", "Teal", "Black", "Gray"]
-
-            tab.pointer_color_optionmenu = OptionMenu(content_frame, tab.pointer_color_var, "")
-            tab.pointer_color_optionmenu.pack(fill="x")
-
-            tab.pointer_color_optionmenu.configure(textvariable=tab.pointer_color_var)
-            # Access the underlying menu and configure each item's text color
-            menu = tab.pointer_color_optionmenu["menu"]
-            # clear any auto-added items
-            menu.delete(0, "end")
-
-            for color in colors:
-                menu.add_command(
-                    label=color,
-                    foreground=color.lower(),
-                    background="white",
-                    activeforeground="white",
-                    activebackground=color.lower(),
-                    command=lambda c=color, var=pointer_color_var: var.set(c)
-                )
-            
-            tab.pointer_color_var.set("Red")
-
-            # Define a callback to update the OptionMenu button color.
-            def update_option_menu_color(*args, current_tab=tab):
-                selected = current_tab.pointer_color_var.get().lower()  # Convert to lowercase for consistency.
-                
-                # update option menu to have a white bg and 'selected' text color
-                style.configure(
-                    current_tab.style_name,
-                    foreground=selected,
-                    background="white",
-                    relief="solid",
-                    borderwidth=1
-                )
-                style.map(
-                    current_tab.style_name,
-                    background=[
-                        ("active", "white"),
-                        ("pressed", "white")
-                    ]
-                )
-                current_tab.pointer_color_optionmenu.configure(style=current_tab.style_name)
-
-                # Check if there is any point in current_tab.points with the same color.
-                points_for_color = [pt for pt in current_tab.points if pt[2].lower() == selected]
-                if points_for_color:
-                    # There is at least one point with the current color; allow toggling.
-                    current_tab.pos_click_checkbox.config(state="normal")
-                else:
-                    # No point with the current color yet, so force positive and disable toggling.
-                    current_tab.pos_click_var.set(True)
-                    current_tab.pos_click_checkbox.config(state="disabled")
-            
-            tab.pointer_color_var.trace_add("write", update_option_menu_color)
-
-            
-
-            # Set the default text color to red at startup
-            update_option_menu_color()
-            
-            
-
-            points_label = Label(content_frame, text="Selected Points")
-            points_label.pack(pady=(10, 2))
-
-            points_frame = Frame(content_frame)
-            points_frame.pack(fill="x")
-
-            scrollbar = ttk.Scrollbar(points_frame, orient="vertical")
-            tab.points_listbox = tk.Listbox(
-                points_frame,
-                height=5,
-                yscrollcommand=scrollbar.set
-            )
-            tab.points_listbox.pack(side="left", fill="x", expand=True)
-            scrollbar.config(command=tab.points_listbox.yview)
-            scrollbar.pack(side="right", fill="y")
-
-
-            undo_redo_frame = Frame(content_frame)
-            undo_redo_frame.pack(fill="x", pady=2)
-            undo_redo_frame.columnconfigure(0, weight=1)
-            undo_redo_frame.columnconfigure(1, weight=1)
-
-            btn_undo = Button(undo_redo_frame, text="Undo", command=self._on_undo_click, bootstyle="info", image=self.undo_icon, compound="left")
-            btn_undo.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-
-            btn_redo = Button(undo_redo_frame, text="Redo", command=self._on_redo_click, bootstyle="info", image=self.redo_icon, compound="left")
-            btn_redo.grid(row=0, column=1, sticky="ew")
-
-            tab.btn_segment = Button(content_frame, text="Segment Image", command=self._segment_image, image=self.segment_icon, compound="left", style="DarkGreen.TButton")
-            tab.btn_segment.pack(fill="x", pady=2)
-
-            # automated multiresolution segmentation button
-            tab.btn_auto_seg = ttk.Button(
-                content_frame,
-                text="Apply Multiresolution\nSegmentation",
-                command=lambda t=tab: self.controller.multiresolution_segmentation(t),
-                image=self.segment_icon,
-                compound="left",
-                bootstyle="success"
-            )
-            tab.btn_auto_seg.pack(fill="x", pady=2)
-
-            tab.btn_export_view = ttk.Button(content_frame, text="Export View with\nSegmentation Mask", command=lambda: self._export_view_with_mask(), image=self.export_icon, compound="left", style="DarkGrey.TButton")
-            tab.btn_export_view.pack(fill="x", pady=2)
-            
+        self.protocol("WM_DELETE_WINDOW", self._on_close)        
 
     def _build_image_frames(self):
         """
@@ -484,7 +255,7 @@ class MainView(Window):
                     self.show_mask(out_mask, ax, obj_id=out_obj_id)
         
         if canvas.show_points_var.get():
-            current_tab = self.tabs[axis]
+            current_tab = self.sidebar.tabs[axis]
             for point in current_tab.points:
                 x, y, color, _ = point
                 self.plot_point(x, y, color, ax)
@@ -524,8 +295,8 @@ class MainView(Window):
             print("No slice selected for segmentation.")
             return
         
-        active_index = self.tabControl.index("current")
-        current_tab = self.tabs[active_index]
+        active_index = self.sidebar.tabControl.index("current")
+        current_tab = self.sidebar.tabs[active_index]
 
         if active_index == 0:
             axis = 0
@@ -619,8 +390,8 @@ class MainView(Window):
 
         if self._on_click_callback is not None:
             # Use the canvas’ own tab index if available; fallback to current tab.
-            active_index = getattr(canvas, "tab_index", self.tabControl.index("current"))
-            current_tab = self.tabs[active_index]
+            active_index = getattr(canvas, "tab_index", self.sidebar.tabControl.index("current"))
+            current_tab = self.sidebar.tabs[active_index]
             color = current_tab.pointer_color_var.get() if current_tab.pointer_color_var else "Red"
             
             self._on_click_callback(event, color)
@@ -638,8 +409,8 @@ class MainView(Window):
 
     def add_point_to_listbox(self, x, y, pos_flag, color=None, active_index=None):
         if active_index is None:
-            active_index = self.tabControl.index("current")
-        current_tab = self.tabs[active_index]
+            active_index = self.sidebar.tabControl.index("current")
+        current_tab = self.sidebar.tabs[active_index]
         
         if color is None:
             color = current_tab.pointer_color_var.get() or "Red"
@@ -665,8 +436,8 @@ class MainView(Window):
             self.sagittal_view.canvas.show_points_checkbox.config(state="normal")
 
     def remove_last_point_from_listbox(self):
-        active_index = self.tabControl.index("current")
-        current_tab = self.tabs[active_index]
+        active_index = self.sidebar.tabControl.index("current")
+        current_tab = self.sidebar.tabs[active_index]
         if current_tab.points_listbox.size() > 0:
             current_tab.points_listbox.delete("end")
         else:
@@ -678,8 +449,8 @@ class MainView(Window):
                 self.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
     def clear_listbox(self):
-        active_index = self.tabControl.index("current")
-        current_tab = self.tabs[active_index]
+        active_index = self.sidebar.tabControl.index("current")
+        current_tab = self.sidebar.tabs[active_index]
         current_tab.points_listbox.delete(0, "end")
         
         canvas = None
@@ -911,7 +682,7 @@ class MainView(Window):
         """
         alpha = 0.4
 
-        active_index = self.tabControl.index("current")
+        active_index = self.sidebar.tabControl.index("current")
 
         if active_index == 0:
             if self.axial_view_mask is None:

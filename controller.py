@@ -79,11 +79,11 @@ class SegmentationController:
         # Use the canvas attribute to determine which tab to update.
         if hasattr(event.canvas, "axis"):
             active_index = event.canvas.axis
-            current_tab = self.view.tabs[active_index]
+            current_tab = self.view.sidebar.tabs[active_index]
         else:
             # Fallback: use the current active tab
-            active_index = self.view.tabControl.index("current")
-            current_tab = self.view.tabs[active_index]
+            active_index = self.view.sidebar.tabControl.index("current")
+            current_tab = self.view.sidebar.tabs[active_index]
 
         pos_flag = 1 if current_tab.pos_click_var.get() else 0
 
@@ -112,8 +112,8 @@ class SegmentationController:
         """
         Undo the last point addition.
         """
-        active_index = self.view.tabControl.index("current")
-        current_tab = self.view.tabs[active_index]
+        active_index = self.view.sidebar.tabControl.index("current")
+        current_tab = self.view.sidebar.tabs[active_index]
 
         if not current_tab.points:
             return
@@ -148,8 +148,8 @@ class SegmentationController:
         """
         Redo the last undone point addition.
         """
-        active_index = self.view.tabControl.index("current")
-        current_tab = self.view.tabs[active_index]
+        active_index = self.view.sidebar.tabControl.index("current")
+        current_tab = self.view.sidebar.tabs[active_index]
 
         if not current_tab.redo_stack:
             return
@@ -180,7 +180,7 @@ class SegmentationController:
     
     def refresh_selection_state(self):
         # Iterate over all tabs and reset their state.
-        for tab in self.view.tabs:
+        for tab in self.view.sidebar.tabs:
             # Clear the Listbox (if it exists)
             if tab.points_listbox:
                 tab.points_listbox.delete(0, "end")
@@ -254,8 +254,8 @@ class SegmentationController:
             "black": 9,
             "gray": 10
         }
-        active_index = self.view.tabControl.index("current")
-        current_tab = self.view.tabs[active_index]
+        active_index = self.view.sidebar.tabControl.index("current")
+        current_tab = self.view.sidebar.tabs[active_index]
         for idx, entry in enumerate(current_tab.points_listbox.get(0,'end')):
             pos_flag = 1 if "Positive click" in entry else 0
             x, y = entry.split(' at ')[-1].strip('()').split(',')
@@ -308,7 +308,7 @@ class SegmentationController:
         full_image = np.asarray(self.model.image)
 
         # get the original image as a numpy array
-        axis = self.view.tabs.index(tab)
+        axis = self.view.sidebar.tabs.index(tab)
         if axis == 0:
             slice_idx = int(self.view.axial_view.canvas.slider.get())
             original_image = full_image[slice_idx, :, :]
