@@ -11,7 +11,7 @@ class ProgressDialog:
         self.top.title(title)
         self.top.grab_set() # make progress dialog modal
 
-        self.prep_label = ttk.Label(self.top, text="Preparing container: 0%")
+        self.prep_label = ttk.Label(self.top, text="Preparing model: 0%")
         self.prep_label.pack(padx=10, pady=5)
         self.prep_progress = ttk.Progressbar(self.top, length=300, mode="determinate", maximum=100)
         self.prep_progress.pack(padx=10, pady=5)
@@ -35,7 +35,7 @@ class ProgressDialog:
         self.prep_start_time = time.time()
         
         self.current_progress = {
-            "Preparing container": 0,
+            "Preparing model": 0,
             "Loading frames": 0,
             "Propagating segmentation": 0
         }
@@ -45,28 +45,28 @@ class ProgressDialog:
     def update_progress(self):
         
         elapsed = time.time() - self.prep_start_time
-        if self.current_progress["Preparing container"] < 100:
+        if self.current_progress["Preparing model"] < 100:
             computed = min(99, (elapsed / CONTAINER_PREP_ETA) * 99)
-            self.current_progress["Preparing container"] = max(self.current_progress["Preparing container"], computed)
-            self.prep_progress["value"] = self.current_progress["Preparing container"]
-            self.prep_label.config(text=f"Preparing container: {int(self.current_progress['Preparing container'])}%")
+            self.current_progress["Preparing model"] = max(self.current_progress["Preparing model"], computed)
+            self.prep_progress["value"] = self.current_progress["Preparing model"]
+            self.prep_label.config(text=f"Preparing model: {int(self.current_progress['Preparing model'])}%")
 
         try:
             while True:
                 stage, value = self.progress_queue.get_nowait()
-                if stage == "Preparing container":
-                    self.current_progress["Preparing container"] = 100
+                if stage == "Preparing model":
+                    self.current_progress["Preparing model"] = 100
                     self.prep_progress["value"] = 100
-                    self.prep_label.config(text="Preparing container: 100%")
+                    self.prep_label.config(text="Preparing model: 100%")
                 elif stage == "Loading frames":
                     self.current_progress["Loading frames"] = value
                     self.load_progress["value"] = value
                     self.load_label.config(text=f"Loading frames: {value}%")
                     # if loading frames has started and prepping is not at 100%, force it
-                    if value > 0 and self.current_progress["Preparing container"] < 100:
-                        self.current_progress["Preparing container"] = 100
+                    if value > 0 and self.current_progress["Preparing model"] < 100:
+                        self.current_progress["Preparing model"] = 100
                         self.prep_progress["value"] = 100
-                        self.prep_label.config(text="Preparing container: 100%")
+                        self.prep_label.config(text="Preparing model: 100%")
                 elif stage == "Propagating segmentation":
                     self.current_progress["Propagating segmentation"] = value
                     self.prop_progress["value"] = value
