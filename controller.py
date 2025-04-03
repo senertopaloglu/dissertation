@@ -256,14 +256,12 @@ class SegmentationController:
         }
         active_index = self.view.sidebar.tabControl.index("current")
         current_tab = self.view.sidebar.tabs[active_index]
-        for idx, entry in enumerate(current_tab.points_listbox.get(0,'end')):
-            pos_flag = 1 if "Positive click" in entry else 0
-            x, y = entry.split(' at ')[-1].strip('()').split(',')
-            color = current_tab.points_listbox.itemcget(idx, "fg")
+        for pt in current_tab.points:
+            x, y, color, pos_flag = pt
             k = color_map.get(color.lower(), 1)
             if k not in points_grouped:
                 points_grouped[k] = []
-            points_grouped[k].append((int(x), int(y), int(pos_flag)))
+            points_grouped[k].append((x, y, pos_flag))
         
         self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback, multi_resolution, is_first, is_final, progress_title)
     
