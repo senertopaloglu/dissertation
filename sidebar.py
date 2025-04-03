@@ -20,6 +20,14 @@ class Sidebar(Frame):
         self._build_sidebar()
 
     def _build_sidebar(self):
+        """
+        Build and initialize the sidebar UI components.
+
+        This method creates and configures the import/export buttons, tab controls,
+        and various UI elements (like the pointer color option menu, points listbox,
+        and undo/redo buttons) for each tab. It also sets up styling and event bindings
+        for menu updates and state changes.
+        """
         # Import and Export Buttons
         btn_import = Button(self, text="Import Image", command=self._import_image,
                              bootstyle="primary", image=self.import_icon, compound="left")
@@ -169,7 +177,7 @@ class Sidebar(Frame):
 
             tab.btn_auto_seg = ttk.Button(content_frame,
                                           text="Apply Multiresolution\nSegmentation",
-                                          command=lambda t=tab: self.controller.multiresolution_segmentation(t),
+                                          command=lambda t=tab: self.controller.multiresolution_segmentation(t) if self.model.image else None,
                                           image=self.segment_icon, compound="left", bootstyle="success")
             tab.btn_auto_seg.pack(fill="x", pady=2)
 

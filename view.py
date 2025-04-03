@@ -27,7 +27,6 @@ except ImportError:
 class MainView(Window):
     """
     The View in our MVC. Responsible for building and displaying the GUI.
-    For all user interactions, we will invoke Controller callbacks.
     """
     def __init__(self, model, controller):
         super().__init__()
@@ -78,8 +77,9 @@ class MainView(Window):
     def _build_image_frames(self):
         """
         Builds the frames that display the axial, coronal, sagittal, and
-        (placeholder) mesh views.
+        (placeholder) mesh view.
         """
+        self.sidebar.controller = self.controller
         self.axial_view_mask = None
         self.coronal_view_mask = None
         self.sagittal_view_mask = None
@@ -99,12 +99,21 @@ class MainView(Window):
         self.update()
     
     def show_mask(self, mask, ax, obj_id=None, random_color=False):
+        """
+        Render and display a segmentation mask overlay on the given matplotlib Axes.
+
+        Parameters:
+            mask (ndarray): The segmentation mask array.
+            ax (matplotlib.axes.Axes): The Axes object where the mask will be overlaid.
+            obj_id (int, optional): Object ID to determine the base color mapping. Defaults to None.
+            random_color (bool, optional): If True, generates a random color for the mask. Defaults to False.
+        """
         if random_color:
             color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
         else:
             if obj_id is not None and obj_id in self.pointer_color_mapping:
-                base_color = self.pointer_color_mapping[obj_id]
-                color = np.array([*mcolors.to_rgb(base_color), 0.6])
+                obj_color = self.pointer_color_mapping[obj_id]
+                color = np.array([*mcolors.to_rgb(obj_color), 0.6])
             else:
                 cmap = plt.get_cmap("tab10")
                 cmap_idx = 0 if obj_id is None else obj_id
@@ -115,7 +124,15 @@ class MainView(Window):
 
     def _create_image_frame(self, text, axis):
         """
-        Helper to create a labeled frame with a matplotlib FigureCanvas and a slider.
+        Creates a labeled frame containing a Matplotlib FigureCanvas along with a slider 
+        and checkboxes to control the display of segmentation masks and points.
+
+        Parameters:
+            text (str): The title text to be displayed on the frame.
+            axis (int): The image axis associated with the frame.
+
+        Returns:
+            Frame: A configured Tkinter frame embedding the Matplotlib FigureCanvas and control widgets.
         """
         outer_frame = Frame(self, relief="solid", borderwidth=1)
         
@@ -178,11 +195,8 @@ class MainView(Window):
             )
             show_mask_checkbox.pack(side="top", anchor="center", pady=5)
 
-            if axis==0 and self.axial_view_mask is None:
-                show_mask_checkbox.config(state="disabled")
-            if axis==1 and self.coronal_view_mask is None:
-                show_mask_checkbox.config(state="disabled")
-            if axis==2 and self.sagittal_view_mask is None:
+            mask = self._get_mask(axis)
+            if mask is None:
                 show_mask_checkbox.config(state="disabled")
 
             canvas.show_mask_checkbox = show_mask_checkbox
@@ -208,8 +222,18 @@ class MainView(Window):
     
     def _create_mesh_view_frame(self, text):
         """
-        Creates a dedicated frame for the 3D mesh view that is initially empty and
-        ignores click events.
+        Creates and returns a dedicated frame for the 3D mesh view.
+
+        This frame is used to display the 3D segmentation mesh. It contains a label
+        for descriptive text and an embedded Matplotlib FigureCanvasTkAgg to render
+        the 3D plot. Click events are ignored in this view since it is not meant 
+        for interactive segmentation.
+
+        Parameters:
+            text (str): The title text to be displayed on the mesh view frame.
+
+        Returns:
+            Frame: A configured Tkinter frame with an embedded Matplotlib canvas.
         """
         outer_frame = Frame(self, relief="solid", borderwidth=1)
 
@@ -233,6 +257,16 @@ class MainView(Window):
     def _update_slice(self, ax, canvas, axis, val, text):
         """
         Update the displayed slice in the given axis whenever the slider changes.
+
+        Parameters:
+            ax (matplotlib.axes.Axes): The axes where the image slice is rendered.
+            canvas (FigureCanvasTkAgg): The canvas containing the Matplotlib figure.
+            axis (int): The image axis (0 for axial, 1 for coronal, 2 for sagittal).
+            val (int or str): The slider value representing the current slice index.
+            text (str): The label indicating the view (e.g., "Axial View").
+
+        Returns:
+            None
         """
         if self._slice_request_callback is None:
             return
@@ -244,15 +278,9 @@ class MainView(Window):
         ax.set_title(f"{text} - Slice {slice_index}")
 
         if canvas.show_mask_var.get():
-            if axis == 0:
-                for out_obj_id, out_mask in self.axial_view_mask[slice_index].items():
-                    self.show_mask(out_mask, ax, obj_id=out_obj_id)
-            if axis == 1:
-                for out_obj_id, out_mask in self.coronal_view_mask[slice_index].items():
-                    self.show_mask(out_mask, ax, obj_id=out_obj_id)
-            if axis == 2:
-                for out_obj_id, out_mask in self.sagittal_view_mask[slice_index].items():
-                    self.show_mask(out_mask, ax, obj_id=out_obj_id)
+            mask = self._get_mask(axis)
+            for out_obj_id, out_mask in mask[slice_index].items():
+                self.show_mask(out_mask, ax, obj_id=out_obj_id)
         
         if canvas.show_points_var.get():
             current_tab = self.sidebar.tabs[axis]
@@ -283,78 +311,87 @@ class MainView(Window):
             if dicom_files:
                 self.controller.load_image(file_path, False)
             else:
-                print("The selected folder does not contain any DICOM files.")
+                tk.messagebox.showerror(
+                    "Import Error",
+                    "The selected folder does not contain any DICOM files.")
         else:
-            print("Invalid selection. Please select a .nii file or a folder containing DICOM files.")
+            tk.messagebox.showerror(
+                "Import Error",
+                "Invalid selection. Please select a .nii file or a folder containing DICOM files.")
 
     def _segment_image(self):
         """
-        image segmentation functionality.
+        Perform image segmentation on the currently selected slice and annotated points.
         """
         if self.last_used_axis is None or self.last_used_slice_index is None:
-            print("No slice selected for segmentation.")
+            tk.messagebox.showerror(
+                "Segmentation Error",
+                "No slice selected for segmentation.")
             return
         
         active_index = self.sidebar.tabControl.index("current")
         current_tab = self.sidebar.tabs[active_index]
 
         if active_index == 0:
-            axis = 0
             axis_str_suffix = "AXIAL"
-            frame_idx = int(self.axial_view.canvas.slider.get())
-            slice_array = self._slice_request_callback(axis, frame_idx)
         elif active_index == 1:
-            axis = 1
             axis_str_suffix = "CORONAL"
-            frame_idx = int(self.coronal_view.canvas.slider.get())
-            slice_array = self._slice_request_callback(axis, frame_idx)
         elif active_index == 2:
-            axis = 2
             axis_str_suffix = "SAGITTAL"
-            frame_idx = int(self.sagittal_view.canvas.slider.get())
-            slice_array = self._slice_request_callback(axis, frame_idx)
         else:
             raise ValueError("Invalid axis string.")
             return
-        
-        points = defaultdict(list) # obj_id -> (x, y, pos (1) or neg (0) flag)
 
-        for idx, entry in enumerate(current_tab.points_listbox.get(0, 'end')):
-            pos_flag = 1 if "Positive click" in entry else 0
-            x, y = entry.split(' at ')[-1].strip('()').split(',')
-            color = current_tab.points_listbox.itemcget(idx, "fg")
+        axis = active_index
+        canvas = self._get_canvas(axis)
+        frame_idx = int(canvas.slider.get())
+        slice_array = self._slice_request_callback(axis, frame_idx) 
+        
+        # object id -> (x, y, <flag for positive (1) or negative (0) click>)
+        points = defaultdict(list)
+
+        for point in current_tab.points:
+            x, y, color, pos_flag = point
             obj_id = self.pointer_color_mapping.get(color, 1)
-            points[obj_id].append((int(x), int(y), int(pos_flag)))
+            points[obj_id].append((x, y, pos_flag))
 
         self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix, is_final=True)
     
     def show_image(self):
+        """Re-initializes and displays all image frames for the current image.
+
+        This method builds the image frames (axial, coronal, sagittal, and 3D mesh)
+        and renders them on the GUI.
+        """
         self._build_image_frames()
     
     def show_segmentation(self, segmentation_mask, axis_str_suffix):
         """
         Display the segmentation mask in view of self.last_used_axis.
-        """
-        axis_str = self.last_used_axis
 
+        Parameters:
+            segmentation_mask (dict): A dictionary containing segmentation masks keyed by slice index.
+            axis_str_suffix (str): A string representing the image orientation (e.g., "AXIAL", "CORONAL", "SAGITTAL").
+        """
         if axis_str_suffix == "AXIAL":
             axis = self.axial_view
-            self.axial_view_mask = segmentation_mask
             label = "Axial View"
             axis_num = 0
+            self.axial_view_mask = segmentation_mask
         elif axis_str_suffix == "CORONAL":
             axis = self.coronal_view
-            self.coronal_view_mask = segmentation_mask
             label = "Coronal View"
             axis_num = 1
+            self.coronal_view_mask = segmentation_mask
         elif axis_str_suffix == "SAGITTAL":
             axis = self.sagittal_view
-            self.sagittal_view_mask = segmentation_mask
             label = "Sagittal View"
             axis_num = 2
+            self.sagittal_view_mask = segmentation_mask
         else:
             raise ValueError("Invalid axis string.")
             return
+
         canvas = axis.canvas
         canvas.show_mask_checkbox.config(state="normal")
         canvas.show_mask_var.set(True)
@@ -381,6 +418,11 @@ class MainView(Window):
     def _on_click(self, event, ax, canvas):
         """
         Internal method to pass click events to the controller's on_click.
+
+        Parameters:
+            event: The matplotlib event triggered by a click.
+            ax (matplotlib.axes.Axes): The Axes object where the click event occurred.
+            canvas (FigureCanvasTkAgg): The canvas containing the matplotlib figure.
         """
         if event.inaxes is None:
             return
@@ -400,10 +442,12 @@ class MainView(Window):
         canvas.draw()
 
     def _on_undo_click(self):
+        """Sets the callback invoked on undo button click."""
         if self._undo_callback:
             self._undo_callback()
 
     def _on_redo_click(self):
+        """Sets the callback invoked on redo button click."""
         if self._redo_callback:
             self._redo_callback()
 
@@ -419,21 +463,13 @@ class MainView(Window):
         current_tab.points_listbox.insert("end", f"{prefix} at ({x},{y})")
         idx = current_tab.points_listbox.size()-1
         try:
-            """
-            Tkinters standard Listbox widget doesnt offer robust per-item styling in all versions.
-            If Tk version supports it (typically Tk 8.6 or later), you can use the Listbox's item configuration to set the foreground color for each item.
-            """
             current_tab.points_listbox.itemconfig(idx, {'fg': color.lower()})
         except Exception as e:
-            print(f"Could not set item color: {e}")
+            tk.messagebox.showerror("Item Color Error", f"Could not set item color: {e}")
         current_tab.points_listbox.yview_moveto(1.0)
 
-        if active_index==0:
-            self.axial_view.canvas.show_points_checkbox.config(state="normal")
-        if active_index==1:
-            self.coronal_view.canvas.show_points_checkbox.config(state="normal")
-        if active_index==2:
-            self.sagittal_view.canvas.show_points_checkbox.config(state="normal")
+        canvas = self._get_canvas(active_index)
+        canvas.show_points_checkbox.config(state="normal")
 
     def remove_last_point_from_listbox(self):
         active_index = self.sidebar.tabControl.index("current")
@@ -441,12 +477,8 @@ class MainView(Window):
         if current_tab.points_listbox.size() > 0:
             current_tab.points_listbox.delete("end")
         else:
-            if active_index == 0:
-                self.axial_view.canvas.show_points_checkbox.config(state="disabled")
-            elif active_index == 1:
-                self.coronal_view.canvas.show_points_checkbox.config(state="disabled")
-            elif active_index == 2:
-                self.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
+            canvas = self._get_canvas(active_index)
+            canvas.show_points_checkbox.config(state="disabled")
 
     def clear_listbox(self):
         active_index = self.sidebar.tabControl.index("current")
@@ -454,20 +486,24 @@ class MainView(Window):
         current_tab.points_listbox.delete(0, "end")
         
         canvas = None
-        if active_index == 0:
-            canvas = self.axial_view.canvas
-        elif active_index == 1:
-            canvas = self.coronal_view.canvas
-        elif active_index == 2:
-            canvas = self.sagittal_view.canvas
+        canvas = self._get_canvas(active_index)
         
         if canvas and hasattr(canvas, 'show_points_checkbox'):
             canvas.show_points_checkbox.config(state="disabled")
 
     def plot_point(self, x, y, color, ax=None):
         """
-        Plot the point on the 'most recently used' Axes (which is the last user-clicked Axes).
-        Since we have multiple Axes, we can track the event.inaxes or store references from the event.
+        Plot the point on the specified Matplotlib Axes
+        If no Axes object is provided, it defaults to the current active Axes.
+
+        Parameters:
+            x (float): The x-coordinate of the point.
+            y (float): The y-coordinate of the point.
+            color (str): The color for the point (e.g., "red", "blue").
+            ax (matplotlib.axes.Axes, optional): The Axes on which to plot the point. Defaults to None.
+
+        Returns:
+            matplotlib.lines.Line2D: The line object representing the plotted point.
         """
         # We can glean the current figure from plt.gcf(), but typically you'd keep references.
         if ax is None:
@@ -476,7 +512,14 @@ class MainView(Window):
 
     def draw_canvas(self, ax_idx=None):
         """
-        Redraw the active matplotlib figure.
+        Redraw the Matplotlib figure for the specified view.
+
+        Parameters:
+            ax_idx (int, optional): An index representing the view to redraw.
+                - 0: Axial view
+                - 1: Coronal view
+                - 2: Sagittal view
+                If None, redraws the current active figure's canvas.
         """
         if ax_idx is None:
             plt.gcf().canvas.draw()
@@ -493,7 +536,7 @@ class MainView(Window):
 
     def reset_views(self):
         """
-        Force a refresh of all image frames to remove lingering drawn points.
+        Force a refresh of all image frames to remove any residual points.
         """
         if self.model.image:
             try:
@@ -519,6 +562,12 @@ class MainView(Window):
         """
         Update mesh view with the segmentation result and update the label to
         reflect the view used for segmentation.
+
+        Parameters:
+            video_segments (dict): A dictionary of segmentation data for each frame.
+                Each key represents a frame index and its value is a dictionary mapping object IDs to masks.
+            axis_str_suffix (str): A string indicating the segmentation view orientation
+                (e.g., "AXIAL", "CORONAL", or "SAGITTAL").
         """
         # Step 1: Convert segmented frames into a 3D volume
         z_dim = len(video_segments) # Number of frames
@@ -582,8 +631,8 @@ class MainView(Window):
     def _export_3d_mesh(self):
         """
         Exports the 3D mesh currently displayed in the mesh view as an STL file.
-        The method uses the latest segmentation (stored in self.last_video_segments)
-        to recompute the mesh using marching cubes and then exports it.
+        Uses the latest segmentation (stored in self.last_video_segments)
+        to recompute the mesh using an optimised marching cubes approach.
         """
         try:
             from stl import mesh
@@ -682,32 +731,14 @@ class MainView(Window):
         """
         alpha = 0.4
 
-        active_index = self.sidebar.tabControl.index("current")
+        original_np = np.asarray(self.model.image)
 
-        if active_index == 0:
-            if self.axial_view_mask is None:
-                tk.messagebox.showerror("Export Error", "No segmentation mask available for axial view.")
-                return
-            original_np = np.asarray(self.model.image)
-            mask_dict = self.axial_view_mask
-            num_slices = original_np.shape[0]
-        elif active_index == 1:
-            if self.coronal_view_mask is None:
-                tk.messagebox.showerror("Export Error", "No segmentation mask available for coronal view.")
-                return
-            original_np = np.asarray(self.model.image)  # Expect shape (Z, H, W)
-            mask_dict = self.coronal_view_mask
-            num_slices = original_np.shape[1]
-        elif active_index == 2:
-            # Sagittal view: slices along axis 2
-            if self.sagittal_view_mask is None:
-                tk.messagebox.showerror("Export Error", "No segmentation mask available for Sagittal view.")
-                return
-            original_np = np.asarray(self.model.image)  # Expect shape (Z, H, W)
-            mask_dict = self.sagittal_view_mask
-            num_slices = original_np.shape[2]
-        else:
-            tk.messagebox.showerror("Export Error", "Invalid view selected.")
+        active_index = self.sidebar.tabControl.index("current")
+        axis = active_index
+        mask_dict = self._get_mask(axis)
+        num_slices = original_np.shape[axis]
+        if mask_dict is None:
+            tk.messagebox.showerror("Export Error", "No segmentation mask available for selected view.")
             return
 
         composite_slices = []
@@ -814,6 +845,44 @@ class MainView(Window):
         nii_img = nib.Nifti1Image(composite_volume, affine=np.eye(4))
         nib.save(nii_img, export_filename)
         tk.messagebox.showinfo("Export Successful", f"Image with segmentation overlay exported as:\n{export_filename}")
+    
+    def _get_canvas(self, axis):
+        """
+        Returns the canvas corresponding to the specified axis.
+
+        Parameters:
+            axis (int): The axis number (0 for axial, 1 for coronal, 2 for sagittal).
+
+        Returns:
+            FigureCanvasTkAgg: The canvas associated with the specified axis.
+        """
+        if axis == 0:
+            return self.axial_view.canvas
+        elif axis == 1:
+            return self.coronal_view.canvas
+        elif axis == 2:
+            return self.sagittal_view.canvas
+        else:
+            raise ValueError("Invalid axis number. Must be 0, 1, or 2.")
+        
+    def _get_mask(self, axis):
+        """
+        Returns the canvas corresponding to the specified axis.
+
+        Parameters:
+            axis (int): The axis number (0 for axial, 1 for coronal, 2 for sagittal).
+        
+        Returns:
+            dict: The segmentation mask associated with the specified axis.
+        """
+        if axis == 0:
+            return self.axial_view_mask
+        elif axis == 1:
+            return self.coronal_view_mask
+        elif axis == 2:
+            return self.sagittal_view_mask
+        else:
+            raise ValueError("Invalid axis number. Must be 0, 1, or 2.")
 
     def clear_mesh_view(self):
         """
