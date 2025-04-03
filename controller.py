@@ -50,7 +50,7 @@ class SegmentationController:
         Loads the image from the given file path into the model.
         """
         if not is_nifti:
-            file_path = DicomToNifti.convert(file_path)
+            file_path = DicomToNifti().convert(file_path, None)
         self.model.change_image(file_path)
         self.view.show_image()
         self.refresh_selection_state()

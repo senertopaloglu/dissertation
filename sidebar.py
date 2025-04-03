@@ -29,9 +29,13 @@ class Sidebar(Frame):
         for menu updates and state changes.
         """
         # Import and Export Buttons
-        btn_import = Button(self, text="Import Image", command=self._import_image,
+        btn_import_nifti = Button(self, text="Import NIfTI File", command=self._import_nifti,
                              bootstyle="primary", image=self.import_icon, compound="left")
-        btn_import.pack(fill="x", pady=5)
+        btn_import_nifti.pack(fill="x", pady=5)
+
+        btn_import_dicom = Button(self, text="Import DICOM Folder", command=self._import_dicom,
+                                bootstyle="primary", image=self.import_icon, compound="left")
+        btn_import_dicom.pack(fill="x", pady=5)
 
         export_style = ttk.Style()
         export_style.configure("DarkGrey.TButton",
@@ -187,6 +191,14 @@ class Sidebar(Frame):
             tab.btn_export_view.pack(fill="x", pady=2)
 
     # The functions below forward user actions to the controller.
+    def _import_nifti(self):
+        if self.view:
+            self.view.import_nifti()
+    
+    def _import_dicom(self):
+        if self.view:
+            self.view.import_dicom()
+            
     def _import_image(self):
         if self.view:
             self.view._import_image()
