@@ -5,6 +5,9 @@ from model import ImageModel
 from controller import SegmentationController
 from view import MainView
 
+# Example Usages:
+# Run locally via `python app.py --mode local` or `python app.py`
+# Run remotely via `python app.py --mode remote`
 
 def main():
     """
@@ -13,6 +16,10 @@ def main():
     Creates the Model, View, and Controller components,
     and starts the Tkinter main loop.
     """
+    parser = argparse.ArgumentParser(description="Image Segmentation Application")
+    parser.add_argument('--mode', choices=['local', 'remote'], default='local', help='Mode of operation: local or remote')
+    args = parser.parse_args()
+    
     # Create the Model
     model = ImageModel(None)
 
@@ -22,6 +29,7 @@ def main():
 
     # Create the Controller
     controller = SegmentationController(model, view)
+    controller.is_remote = (args.mode == 'remote')
 
     # we now assign controller to the view properly
     view.controller = controller

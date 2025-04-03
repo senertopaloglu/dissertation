@@ -29,7 +29,7 @@ class StdoutCapture:
             self.progress_queue.put(("Propagating segmentation", percent))
         # use successfully installed dependencies as a signal that container is ready
         if "Successfully installed" in line:
-            self.progress_queue.put(("Preparing container", 100))
+            self.progress_queue.put(("Preparing model", 100))
     
     def flush(self):
         self.original_stdout.flush()

@@ -324,7 +324,7 @@ class MainView(Window):
         self.update_idletasks()
         self.update()
 
-    def _import_image(self):
+    def import_nifti(self):
         """
         Opens a file dialog to select a .nii file and loads it.
         """
@@ -333,23 +333,61 @@ class MainView(Window):
             filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")]
         )
 
-        if not file_path:
+        if file_path and os.path.isfile(file_path) and file_path.endswith(".nii"):
+            self.controller.load_image(file_path)
+        else:
+            tk.messagebox.showerror("Import Error", "Please select a valid NIfTI file.")
+    
+    def import_dicom(self):
+        """
+        Opens a file dialog to select a folder containing DICOM files and loads it.
+        """
+        folder_path = tk.filedialog.askdirectory(
+            title="Select a folder containing DICOM files"
+        )
+
+        if not folder_path:
             return
         
-        if os.path.isfile(file_path) and file_path.endswith(".nii"):
-            self.controller.load_image(file_path)
-        elif os.path.isdir(file_path):
-            dicom_files = [f for f in os.listdir(file_path) if f.lower().endswith(".dcm")]
-            if dicom_files:
-                self.controller.load_image(file_path, False)
-            else:
-                tk.messagebox.showerror(
-                    "Import Error",
-                    "The selected folder does not contain any DICOM files.")
+        dicom_files = [f for f in os.listdir(folder_path) if f.lower().endswith(".dcm")]
+        if dicom_files:
+            self.controller.load_image(folder_path, False)
         else:
             tk.messagebox.showerror(
                 "Import Error",
-                "Invalid selection. Please select a .nii file or a folder containing DICOM files.")
+                "The selected folder does not contain any DICOM files."
+            )
+
+    def _import_image(self):
+        """
+        Opens a file dialog to select a .nii file and loads it.
+        """
+        file_path = tk.filedialog.askopenfilename(
+            title="Select a NIfTI file (cancel to choose DICOM folder)",
+            filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")]
+        )
+
+        if file_path and os.path.isfile(file_path) and file_path.endswith(".nii"):
+            self.controller.load_image(file_path)
+            return
+
+        # If the file dialog is cancelled or the file is not valid,
+        # ask for a folder.
+        folder_path = tk.filedialog.askdirectory(
+            title="Select a folder containing DICOM files"
+        )
+
+        if not folder_path:
+            return
+        
+        dicom_files = [f for f in os.listdir(folder_path) if f.lower().endswith(".dcm")]
+        if dicom_files:
+            self.controller.load_image(folder_path, False)
+        else:
+            tk.messagebox.showerror(
+                "Import Error",
+                "The selected folder does not contain any DICOM files."
+            )
 
     def _segment_image(self):
         """

@@ -50,7 +50,7 @@ class SegmentationController:
         Loads the image from the given file path into the model.
         """
         if not is_nifti:
-            file_path = DicomToNifti.convert(file_path)
+            file_path = DicomToNifti().convert(file_path, None)
         self.model.change_image(file_path)
         self.view.show_image()
         self.refresh_selection_state()
@@ -231,15 +231,17 @@ class SegmentationController:
             subprocess.run([sys.executable, "nifti_to_jpg.py", f"./temp/{filename}.nii", local_folder, "--axis", axis_str_suffix.lower(), "--downsampled"], check=True)
         else:
             subprocess.run([sys.executable, "nifti_to_jpg.py", f"{filename}.nii", local_folder, "--axis", axis_str_suffix.lower()], check=True)
-        # Step 2: Delete folder in modal
-        # do not check=True because no graceful handling if folder not exists in modal volume
-        subprocess.run(["modal", "volume", "rm", "-r", "sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
+        
+        if self.is_remote:
+            # Step 2: Delete folder in modal
+            # do not check=True because no graceful handling if folder not exists in modal volume
+            subprocess.run(["modal", "volume", "rm", "-r", "sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
 
-        # Step 3: Create folder and transfer files to modal
-        subprocess.run(["modal", "volume", "put", "sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
+            # Step 3: Create folder and transfer files to modal
+            subprocess.run(["modal", "volume", "put", "sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
 
-        # Step 4: Delete local JPG folder and contents
-        shutil.rmtree(local_folder)
+            # Step 4: Delete local JPG folder and contents
+            shutil.rmtree(local_folder)
 
         points_grouped = {}
         color_map = {
@@ -266,7 +268,6 @@ class SegmentationController:
         self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback, multi_resolution, is_first, is_final, progress_title)
     
     def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None, multi_resolution=False, is_first=False, is_final=False, progress_title=None):
-        import modal_handler
         # create progress dialog as a child of the main view
         progress_dialog = ProgressDialog(self.view, title=progress_title if progress_title is not None else "Progress")
         progress_dialog.top.transient(self.view)
@@ -278,10 +279,23 @@ class SegmentationController:
             try:
                 # redirect stdout to capture progress messages
                 with contextlib.redirect_stdout(capture):
-                    video_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final)
-                    # signal completion
-                    progress_dialog.progress_queue.put(("done", 100))
+                    if self.is_remote:
+                        import modal_handler
+                        video_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final)
+                        # signal completion
+                        progress_dialog.progress_queue.put(("done", 100))
+                    else:
+                        import local_handler
+                        video_segments = local_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final)
+                        # signal completion
+                        progress_dialog.progress_queue.put(("done", 100))
+                
                 # once segmentation finished, update the view on the main thread
+                if self.is_remote:
+                    local_folder = f"./temp/{foldername}"
+                    if os.path.exists(local_folder):
+                        shutil.rmtree(local_folder)
+
                 self.view.after(0, lambda: finish_segmentation(video_segments))
             except Exception as e:
                 self.view.after(0, lambda: tk.messagebox.showerror("Segmentation Error", f"An exception occurred in the container:\n{e}"))
