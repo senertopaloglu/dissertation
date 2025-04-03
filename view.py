@@ -289,9 +289,11 @@ class MainView(Window):
             return
         
         slice_index = int(float(val))
+
         # capture current zoom limits to keep them as the underlying slice changes
-        current_xlim = ax.get_xlim()
-        current_ylim = ax.get_ylim()
+        if getattr(self, "_preserve_zoom", True):
+            current_xlim = ax.get_xlim()
+            current_ylim = ax.get_ylim()
 
         slice_array = self._slice_request_callback(axis, slice_index)
         ax.clear()
@@ -299,9 +301,13 @@ class MainView(Window):
         ax.set_title(f"{text} - Slice {slice_index}")
 
         # restore zoom limits
-        if current_xlim != (0.0, 1.0) and current_ylim != (0.0, 1.0):
-            ax.set_xlim(current_xlim)
-            ax.set_ylim(current_ylim)
+        if getattr(self, "_preserve_zoom", True):
+            if current_xlim != (0.0, 1.0) and current_ylim != (0.0, 1.0):
+                ax.set_xlim(current_xlim)
+                ax.set_ylim(current_ylim)
+        else:
+            ax.autoscale()
+            self._preserve_zoom = True
 
         if canvas.show_mask_var.get():
             mask = self._get_mask(axis)
@@ -389,7 +395,9 @@ class MainView(Window):
         This method builds the image frames (axial, coronal, sagittal, and 3D mesh)
         and renders them on the GUI.
         """
+        self._preserve_zoom = False
         self._build_image_frames()
+        
     
     def show_segmentation(self, segmentation_mask, axis_str_suffix):
         """
