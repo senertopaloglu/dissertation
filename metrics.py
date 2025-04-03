@@ -30,14 +30,6 @@ def dice_coefficient(y_true, y_pred):
         return 1.0  # both masks are empty
     return 2.0 * intersection / float(denominator)
 
-def _get_spacing():
-    """
-    Compute the spacing (pixel/voxel size) along each dimension. Default is 1.0.
-    
-    Returns:
-        A tuple representing the spacing along each dimension.
-    """
-
 def transformToRealCoordinates(indexPoints,dicom_dir):
     """
     This function transforms index points to the real world coordinates
@@ -97,58 +89,3 @@ def new_assd(Vref, Vseg, dicom_dir):
     
     assd=(dist_seg_to_ref.sum() + dist_ref_to_seg.sum())/(len(dist_seg_to_ref)+len(dist_ref_to_seg))
     return assd
-
-def assd(y_true, y_pred):
-    """
-    Compute the Average Symmetric Surface Distance (ASSD) between two segmentation masks.
-    
-    The function extracts the border pixels/voxels of each mask and computes
-    the average of the minimum distances from each border point in one mask to 
-    the other mask. A spacing value (or tuple) can be provided to account for physical
-    spacing.
-    
-    Args:
-        y_true (np.ndarray): The ground truth mask.
-        y_pred (np.ndarray): The predicted mask.
-        spacing (float or tuple): The spacing (pixel/voxel size) along each dimension.
-                                  Default is 1.0.
-    
-    Returns:
-        The ASSD value between the two masks or np.nan if one of the borders is empty.
-    """
-    y_true = y_true.astype(bool)
-    y_pred = y_pred.astype(bool)
-
-    dims = y_true.ndim
-    struct = ndimage.generate_binary_structure(dims, 1)
-
-    # Extract border elements using XOR between mask and its erosion
-    true_border = y_true ^ ndimage.binary_erosion(y_true, structure=struct)
-    pred_border = y_pred ^ ndimage.binary_erosion(y_pred, structure=struct)
-    
-    # get coordinates of the border points
-    true_coords = np.array(np.where(true_border)).T
-    pred_coords = np.array(np.where(pred_border)).T
-
-    if true_coords.shape[0] == 0 or pred_coords.shape[0] == 0:
-        # one of the masks is empty or has no border points
-        return np.nan
-    
-    spacing = _get_spacing()
-    
-    true_coords = true_coords * spacing
-    pred_coords = pred_coords * spacing
-
-    true_coords = true_coords.astype(float)
-    pred_coords = pred_coords.astype(float)
-
-    # build kd-tree for each set of border points
-    tree_true = KDTree(true_coords)
-    distances_pred_to_true = tree_true.query(pred_coords)
-
-    tree_pred = KDTree(pred_coords)
-    distances_true_to_pred = tree_pred.query(true_coords)
-
-    # compute the average symmetric distance
-    assd_value = (distances_pred_to_true.sum() + distances_true_to_pred.sum()) / (len(distances_pred_to_true) + len(distances_true_to_pred))
-    return assd_value
