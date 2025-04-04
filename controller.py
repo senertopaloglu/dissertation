@@ -3,24 +3,18 @@ import sys
 import shutil
 import os
 import subprocess
-import re
 import contextlib
 import threading
-import queue
-import time
-
-import ttkbootstrap as ttk
-from ttkbootstrap.constants import * # colors and styles
 
 from dicom_to_nifti import DicomToNifti
-
-CONTAINER_PREP_ETA = 210
-import matplotlib.colors as mcolors
+from stdout_capture import StdoutCapture
+from progress_dialog import ProgressDialog
 
 import tkinter as tk
 from tkinter import messagebox
 
-from dicom_to_nifti import DicomToNifti
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import * # colors and styles
 
 import cv2
 import numpy as np
@@ -28,130 +22,6 @@ try:
     import nibabel as nib
 except ImportError:
     print("nibabel is required for saving temporary NIfTI images.")
-
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-
-class StdoutCapture:
-    def __init__(self, original_stdout, progress_queue):
-        self.original_stdout = original_stdout
-        self.progress_queue = progress_queue
-        self.buffer = ""
-    
-    def write(self, text):
-        self.original_stdout.write(text)
-        self.original_stdout.flush()
-        self.buffer += text
-        if "\n" in text:
-            lines = self.buffer.split("\n")
-            for line in lines[:-1]:
-                self.process_line(line)
-            self.buffer = lines[-1]
-    
-    def process_line(self, line):
-        # look for "frame loading" messages
-        m = re.search(r"frame loading \(JPEG\):\s*(\d+)%", line)
-        if m:
-            percent = int(m.group(1))
-            self.progress_queue.put(("Loading frames", percent))
-        # look for "propagate in video" messages
-        m2 = re.search(r"propagate in video:\s*(\d+)%", line)
-        if m2:
-            percent = int(m2.group(1))
-            self.progress_queue.put(("Propagating segmentation", percent))
-        # use successfully installed dependencies as a signal that container is ready
-        if "Successfully installed" in line:
-            self.progress_queue.put(("Preparing container", 100))
-    
-    def flush(self):
-        self.original_stdout.flush()
-
-class ProgressDialog:
-    def __init__(self, master, title="Progress"):
-        self.top = ttk.Toplevel(master)
-        self.top.title(title)
-        self.top.grab_set() # make progress dialog modal
-
-        self.prep_label = ttk.Label(self.top, text="Preparing container: 0%")
-        self.prep_label.pack(padx=10, pady=5)
-        self.prep_progress = ttk.Progressbar(self.top, length=300, mode="determinate", maximum=100)
-        self.prep_progress.pack(padx=10, pady=5)
-
-        self.load_label = ttk.Label(self.top, text="Loading frames: 0%")
-        self.load_label.pack(padx=10, pady=5)
-        self.load_progress = ttk.Progressbar(self.top, orient="horizontal", length=300,
-                                                mode="determinate", maximum=100)
-        self.load_progress.pack(padx=10, pady=5)
-
-        self.prop_label = ttk.Label(self.top, text="Propagating segmentation: 0%")
-        self.prop_label.pack(padx=10, pady=5)
-        self.prop_progress = ttk.Progressbar(self.top, orient="horizontal", length=300,
-                                                mode="determinate", maximum=100)
-        self.prop_progress.pack(padx=10, pady=5)
-
-        # create a queue to receive progress updates
-        self.progress_queue = queue.Queue()
-
-        # container prep ETA reached => 99%. final 1% when dependencies are successfully installed
-        self.prep_start_time = time.time()
-        
-        self.current_progress = {
-            "Preparing container": 0,
-            "Loading frames": 0,
-            "Propagating segmentation": 0
-        }
-
-        self.max_prop = 0
-    
-    def update_progress(self):
-        
-        elapsed = time.time() - self.prep_start_time
-        if self.current_progress["Preparing container"] < 100:
-            computed = min(99, (elapsed / CONTAINER_PREP_ETA) * 99)
-            self.current_progress["Preparing container"] = max(self.current_progress["Preparing container"], computed)
-            self.prep_progress["value"] = self.current_progress["Preparing container"]
-            self.prep_label.config(text=f"Preparing container: {int(self.current_progress['Preparing container'])}%")
-
-        try:
-            while True:
-                stage, value = self.progress_queue.get_nowait()
-                if stage == "Preparing container":
-                    self.current_progress["Preparing container"] = 100
-                    self.prep_progress["value"] = 100
-                    self.prep_label.config(text="Preparing container: 100%")
-                elif stage == "Loading frames":
-                    self.current_progress["Loading frames"] = value
-                    self.load_progress["value"] = value
-                    self.load_label.config(text=f"Loading frames: {value}%")
-                    # if loading frames has started and prepping is not at 100%, force it
-                    if value > 0 and self.current_progress["Preparing container"] < 100:
-                        self.current_progress["Preparing container"] = 100
-                        self.prep_progress["value"] = 100
-                        self.prep_label.config(text="Preparing container: 100%")
-                elif stage == "Propagating segmentation":
-                    self.current_progress["Propagating segmentation"] = value
-                    self.prop_progress["value"] = value
-                    if value < self.max_prop:
-                        self.prop_label.config(text=f"Propagating segmentation backwards: {value}%")
-                    else:
-                        self.max_prop = value
-                        self.prop_label.config(text=f"Propagating segmentation: {value}%")
-                    # if propagation has started and loading frames is not at 100%, force it
-                    if value > 0 and self.current_progress["Loading frames"] < 100:
-                        self.current_progress["Loading frames"] = 100
-                        self.load_progress["value"] = 100
-                        self.load_label.config(text="Loading frames: 100%")
-                elif stage == "done":
-                    pass
-        except queue.Empty:
-            pass
-
-        # Continue polling every 100ms until the window is destroyed.
-        if self.top.winfo_exists():
-            self.top.after(100, self.update_progress)
-        
-    def close(self):
-        self.top.destroy()
 
 
 class SegmentationController:
@@ -181,7 +51,7 @@ class SegmentationController:
         Loads the image from the given file path into the model.
         """
         if not is_nifti:
-            file_path = DicomToNifti.convert(file_path)
+            file_path = DicomToNifti().convert(file_path, None)
         self.model.change_image(file_path)
         self.view.show_image()
         self.refresh_selection_state()
@@ -196,7 +66,7 @@ class SegmentationController:
         """
         return self.model.get_slice(axis, slice_index)
 
-    def on_click(self, event, pointer_color):
+    def on_click(self, event, pointer_color, ax):
         """
         Callback for mouse clicks on the matplotlib canvas.
         This is where we record the point location and update the view.
@@ -210,11 +80,11 @@ class SegmentationController:
         # Use the canvas attribute to determine which tab to update.
         if hasattr(event.canvas, "axis"):
             active_index = event.canvas.axis
-            current_tab = self.view.tabs[active_index]
+            current_tab = self.view.sidebar.tabs[active_index]
         else:
             # Fallback: use the current active tab
-            active_index = self.view.tabControl.index("current")
-            current_tab = self.view.tabs[active_index]
+            active_index = self.view.sidebar.tabControl.index("current")
+            current_tab = self.view.sidebar.tabs[active_index]
 
         pos_flag = 1 if current_tab.pos_click_var.get() else 0
 
@@ -228,7 +98,7 @@ class SegmentationController:
 
         # Update the View
         self.view.add_point_to_listbox(x, y, pos_flag, active_index=active_index)
-        line = self.view.plot_point(x, y, color)
+        line = self.view.plot_point(x, y, color, ax)
         current_tab.line_objects.append(line)
 
         # update the state of the pos_click_checkbox based on points for the current color.
@@ -243,8 +113,8 @@ class SegmentationController:
         """
         Undo the last point addition.
         """
-        active_index = self.view.tabControl.index("current")
-        current_tab = self.view.tabs[active_index]
+        active_index = self.view.sidebar.tabControl.index("current")
+        current_tab = self.view.sidebar.tabs[active_index]
 
         if not current_tab.points:
             return
@@ -279,8 +149,8 @@ class SegmentationController:
         """
         Redo the last undone point addition.
         """
-        active_index = self.view.tabControl.index("current")
-        current_tab = self.view.tabs[active_index]
+        active_index = self.view.sidebar.tabControl.index("current")
+        current_tab = self.view.sidebar.tabs[active_index]
 
         if not current_tab.redo_stack:
             return
@@ -311,7 +181,7 @@ class SegmentationController:
     
     def refresh_selection_state(self):
         # Iterate over all tabs and reset their state.
-        for tab in self.view.tabs:
+        for tab in self.view.sidebar.tabs:
             # Clear the Listbox (if it exists)
             if tab.points_listbox:
                 tab.points_listbox.delete(0, "end")
@@ -362,15 +232,17 @@ class SegmentationController:
             subprocess.run([sys.executable, "nifti_to_jpg.py", f"./temp/{filename}.nii", local_folder, "--axis", axis_str_suffix.lower(), "--downsampled"], check=True)
         else:
             subprocess.run([sys.executable, "nifti_to_jpg.py", f"{filename}.nii", local_folder, "--axis", axis_str_suffix.lower()], check=True)
-        # Step 2: Delete folder in modal
-        # do not check=True because no graceful handling if folder not exists in modal volume
-        subprocess.run(["modal", "volume", "rm", "-r", "my_adapted_sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
+        
+        if self.is_remote:
+            # Step 2: Delete folder in modal
+            # do not check=True because no graceful handling if folder not exists in modal volume
+            subprocess.run(["modal", "volume", "rm", "-r", "sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
 
-        # Step 3: Create folder and transfer files to modal
-        subprocess.run(["modal", "volume", "put", "my_adapted_sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
+            # Step 3: Create folder and transfer files to modal
+            subprocess.run(["modal", "volume", "put", "sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
 
-        # Step 4: Delete local JPG folder and contents
-        shutil.rmtree(local_folder)
+            # Step 4: Delete local JPG folder and contents
+            shutil.rmtree(local_folder)
         
         self.run_segmentation_with_progress(slices, points, frame_idx, axis_str_suffix, foldername, completion_callback, multi_resolution, is_first, is_final, progress_title, is_global)
     
@@ -387,10 +259,23 @@ class SegmentationController:
             try:
                 # redirect stdout to capture progress messages
                 with contextlib.redirect_stdout(capture):
-                    video_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
-                    # signal completion
-                    progress_dialog.progress_queue.put(("done", 100))
+                    if self.is_remote:
+                        import modal_handler
+                        video_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
+                        # signal completion
+                        progress_dialog.progress_queue.put(("done", 100))
+                    else:
+                        import local_handler
+                        video_segments = local_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
+                        # signal completion
+                        progress_dialog.progress_queue.put(("done", 100))
+                
                 # once segmentation finished, update the view on the main thread
+                if self.is_remote:
+                    local_folder = f"./temp/{foldername}"
+                    if os.path.exists(local_folder):
+                        shutil.rmtree(local_folder)
+
                 self.view.after(0, lambda: finish_segmentation(video_segments))
             except Exception as e:
                 self.view.after(0, lambda: tk.messagebox.showerror("Segmentation Error", f"An exception occurred in the container:\n{e}"))
@@ -415,8 +300,8 @@ class SegmentationController:
         full_image = np.asarray(self.model.image)
 
         # get the original image as a numpy array
-        axis = self.view.tabs.index(tab)
-        if axis == 0 or self.view.global_segmentation_var.get():
+        axis = self.view.sidebar.tabs.index(tab)
+        if axis == 0 or self.view.sidebar.global_segmentation_var.get():
             slice_idx = int(self.view.axial_view.canvas.slider.get())
             original_image = full_image[slice_idx, :, :]
             original_h, original_w = original_image.shape
@@ -459,8 +344,8 @@ class SegmentationController:
             "gray": 10
         }
         seeds = {}
-        if self.view.global_segmentation_var.get():
-            for i, tab in enumerate(self.view.tabs):
+        if self.view.sidebar.global_segmentation_var.get():
+            for i, tab in enumerate(self.view.sidebar.tabs):
                 for point in tab.points:
                     x, y, color, pos_flag = point
                     obj_id = color_mapping.get(color.lower(), 1)
@@ -484,7 +369,7 @@ class SegmentationController:
 
         # helper: downsample the entire volume for the selected view
         def downsample_volume(res):
-            if axis == 0 or self.view.global_segmentation_var.get():
+            if axis == 0 or self.view.sidebar.global_segmentation_var.get():
                 N = full_image.shape[0]
                 vol = np.zeros((N, res, res), dtype=full_image.dtype)
                 for i in range(N):
@@ -548,8 +433,8 @@ class SegmentationController:
             self.segment_image(
                 downsampled_volume,
                 points,
-                frame_idx=slice_idx if not self.view.global_segmentation_var.get() else int(self.view.axial_view.canvas.slider.get()),
-                axis_str_suffix=axis_str_suffix if not self.view.global_segmentation_var.get() else "AXIAL",
+                frame_idx=slice_idx if not self.view.sidebar.global_segmentation_var.get() else int(self.view.axial_view.canvas.slider.get()),
+                axis_str_suffix=axis_str_suffix if not self.view.sidebar.global_segmentation_var.get() else "AXIAL",
                 custom_filename=temp_filename,
                 completion_callback=completion_callback,
                 downsampled=True,
@@ -557,7 +442,7 @@ class SegmentationController:
                 is_first=is_first,
                 is_final=is_final,
                 progress_title=f"Progress {resolution}x{resolution}",
-                is_global=self.view.global_segmentation_var.get()
+                is_global=self.view.sidebar.global_segmentation_var.get()
             )
 
             def check_result():
@@ -599,7 +484,7 @@ class SegmentationController:
                                 if M["m00"] != 0:
                                     cx = int(M["m10"] / M["m00"])
                                     cy = int(M["m01"] / M["m00"])
-                                    if self.view.global_segmentation_var.get():
+                                    if self.view.sidebar.global_segmentation_var.get():
                                         # if global segmentation, use the original image size
                                         cx = int(cx * (original_w / resolution))
                                         cy = int(cy * (original_h / resolution))
@@ -641,24 +526,3 @@ class SegmentationController:
         # initialise variable to hold upsampled masks from last iteration
         upsampled_masks = {}
         iteration(current_res, seeds)
-
-    
-    # NEW: Apply final segmentation mask to the respective frame.
-    def apply_segmentation_to_frame(self, mask, tab):
-        active_index = self.view.tabs.index(tab)
-        if active_index == 0:
-            axis_str_suffix = "AXIAL"
-            canvas = self.view.axial_view.canvas
-            self.view.axial_view_mask = {int(canvas.slider.get()): {1: mask}}
-            label = "Axial View"
-        elif active_index == 1:
-            axis_str_suffix = "CORONAL"
-            canvas = self.view.coronal_view.canvas
-            self.view.coronal_view_mask = {int(canvas.slider.get()): {1: mask}}
-            label = "Coronal View"
-        elif active_index == 2:
-            axis_str_suffix = "SAGITTAL"
-            canvas = self.view.sagittal_view.canvas
-            self.view.sagittal_view_mask = {int(canvas.slider.get()): {1: mask}}
-            label = "Sagittal View"
-        self.view._update_slice(canvas.figure.axes[0], canvas, active_index, int(canvas.slider.get()), label)

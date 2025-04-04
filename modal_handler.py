@@ -5,7 +5,6 @@ import site
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
 
 import modal
 
@@ -36,35 +35,9 @@ vol = modal.Volume.from_name("my_adapted_sam_2_medical_3d")
 app = modal.App("adapted-example-3")
 
 
-
-def show_mask(mask, ax, obj_id=None, random_color=False):
-    if random_color:
-        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-    else:
-        cmap = plt.get_cmap("tab10")
-        cmap_idx = 0 if obj_id is None else obj_id
-        color = np.array([*cmap(cmap_idx)[:3], 0.6])
-    h, w = mask.shape[-2:]
-    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-    ax.imshow(mask_image)
-
-
-def show_points(coords, labels, ax, marker_size=200):
-    pos_points = coords[labels==1]
-    neg_points = coords[labels==0]
-    ax.scatter(pos_points[:, 0], pos_points[:, 1], color='green', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
-    ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
-
 @app.function(gpu="L4", image=image, volumes={"/root/temp":vol}, timeout=1000, mounts=[])
 def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, is_final, is_global):
     import subprocess
-
-    # output = subprocess.check_output(["nvidia-smi"], text=True)
-    # print(output)
-    
-    # cwd=os.getcwd()
-    # print(cwd)
-    # print(os.listdir(cwd))
     
     print("#" * 30)
     print(f"points : {points_np}")
@@ -77,14 +50,12 @@ def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, 
         subprocess.call([sys.executable, "-m", "venv", venv_dir])
     venv_python = os.path.join(venv_dir, "bin", "python")
     venv_site = os.path.join(venv_dir, "lib", f"python{sys.version_info.major}.{sys.version_info.minor}", "site-packages")
+    
     # Update current process to use venv's site-packages
     if venv_site not in sys.path:
         site.addsitedir(venv_site)
 
-    #subprocess.call([venv_python, "-m", "pip", "install", "--no-build-isolation", "-e", "."])
-    #subprocess.call([venv_python, "-m", "pip", "install", "-e", ".[demo]"])
-
-    if multi_resolution and is_first:
+    if not multi_resolution or is_first:
         try:
             subprocess.check_output([venv_python, '-m', 'pip', 'show', 'hydra-core'])
         except subprocess.CalledProcessError as e:
@@ -101,18 +72,6 @@ def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, 
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
-
-    # cwd=os.getcwd()
-    # print("\n"*30)
-    # print(os.listdir(cwd))
-    # print("\n"*30)
-
-    # print(sys.version_info)
-
-    # #file_dir = os.path.dirname(__file__)
-    # #sys.path.append(file_dir)
-    # #sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
     current_directory = os.getcwd()
     os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + os.pathsep + current_directory 
     if current_directory not in sys.path:
@@ -122,14 +81,6 @@ def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, 
 
         if current_directory not in sys.path:
             sys.path.append(current_directory)
-
-    # #sys.path.append(os.path.expanduser("./sam2"))
-
-    # print("*****")
-    # print(sys.path)
-    # print("*****")
-
-    print(frame_idx)
 
     from sam2.build_sam import build_sam2_video_predictor
     sam2_checkpoint = "./sam2_hiera_large.pt"
@@ -228,26 +179,26 @@ def do_some_magic(points_np, frame_idx, foldername, multi_resolution, is_first, 
 
 def segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global=False):
     """
-    segmentation functionality.
+    Invoke remote segmentation on video frames using provided annotation points.
+
+    This function is a wrapper that forwards the segmentation task to the 
+    remote function 'do_some_magic' via Modal (modal.com). The actual segmentation logic 
+    is executed remotely, and results are returned as a dictionary mapping frame 
+    indices to segmentation mask results.
+
+    Parameters:
+        slices: Unused parameter for segmentation slices.
+        points: A dictionary where keys are object IDs and values are lists of point coordinates and labels.
+        frame_idx: The index of the reference frame for segmentation.
+        foldername: The folder name containing video frames.
+        multi_resolution: Boolean indicating if multi-resolution processing should be applied.
+        is_first: Boolean flag indicating if this is the first segmentation invocation.
+        is_final: Boolean flag indicating if this is the final segmentation (which triggers full video propagation).
+
+    Returns:
+        video_segments: A dictionary mapping frame indices to segmentation mask results.
     """
-    # print(app.name)
     with modal.enable_output():
         with app.run():
             video_segments=do_some_magic.remote(points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
-    # video_dir = f"./{foldername}"
-    # vis_frame_stride = 15
-    # frame_names = [
-    #     p for p in os.listdir(video_dir)
-    #     if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
-    # ]
-    # frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
-    # plt.close("all")
-    # for out_frame_idx in range(0, len(frame_names), vis_frame_stride):
-    #     plt.figure(figsize=(6, 4))
-    #     plt.title(f"frame {out_frame_idx}")
-    #     plt.imshow(Image.open(os.path.join(video_dir, frame_names[out_frame_idx])))
-    #     for out_obj_id, out_mask in video_segments[out_frame_idx].items():
-    #         show_mask(out_mask, plt.gca(), obj_id=out_obj_id)
-    # plt.show()
-    # print("finished in handler, returning to controller")
     return video_segments

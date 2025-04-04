@@ -5,16 +5,21 @@ from model import ImageModel
 from controller import SegmentationController
 from view import MainView
 
-#import modal_handler
+# Example Usages:
+# Run locally via `python app.py --mode local` or `python app.py`
+# Run remotely via `python app.py --mode remote`
 
-#import modal
-
-# app = modal.App("example-hello-world")
-
-# @app.local_entrypoint()
 def main():
-    #modal_handler.set_app(app)
+    """
+    Main entry point of the application.
 
+    Creates the Model, View, and Controller components,
+    and starts the Tkinter main loop.
+    """
+    parser = argparse.ArgumentParser(description="Image Segmentation Application")
+    parser.add_argument('--mode', choices=['local', 'remote'], default='local', help='Mode of operation: local or remote')
+    args = parser.parse_args()
+    
     # Create the Model
     model = ImageModel(None)
 
@@ -24,12 +29,12 @@ def main():
 
     # Create the Controller
     controller = SegmentationController(model, view)
+    controller.is_remote = (args.mode == 'remote')
 
-    # Now that the controller is created, we can assign it to the view properly
-    # (though we already pass it in the constructor, you could pass references either way).
+    # we now assign controller to the view properly
     view.controller = controller
 
-    # build frames now view._slice_request_callback is set
+    # trigger view and mesh frames (it relies on view._slice_request_callback)
     view._build_image_frames()
 
     # Start the Tkinter main loop

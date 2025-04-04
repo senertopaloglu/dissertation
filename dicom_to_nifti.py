@@ -22,8 +22,11 @@ def main():
     args = parser.parse_args()
 
     converter = DicomToNifti()
-    nifti_file_path = converter.convert(args.dicom_folder_path, args.nifti_file_path)
-    print(f"NIfTI file saved to: {nifti_file_path}")
+    try:
+        nifti_file_path = converter.convert(args.dicom_folder_path, args.nifti_file_path)
+        print(f"NIfTI file saved to: {nifti_file_path}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to convert DICOM to NIfTI: {e}")
 
 if __name__ == "__main__":
     main()
