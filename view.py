@@ -55,6 +55,8 @@ class MainView(Window):
             10: "gray"
         }
 
+        self.color_obj_id_mapping = {v: k for k, v in self.pointer_color_mapping.items()}
+
         # Keep references to callback functions
         self._on_click_callback = None
         self._undo_callback = None
@@ -422,7 +424,7 @@ class MainView(Window):
 
         for point in current_tab.points:
             x, y, color, pos_flag = point
-            obj_id = self.pointer_color_mapping.get(color, 1)
+            obj_id = self.color_obj_id_mapping.get(color.lower(), 1)
             points[obj_id].append((x, y, pos_flag))
 
         self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix, is_final=True)
