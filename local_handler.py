@@ -27,8 +27,9 @@ def run_segmentation(points, frame_idx, foldername, multi_resolution, is_first, 
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
     
-    sam2_checkpoint = "./SAM_2_Medical_3D/sam2_hiera_large.pt"
-    model_cfg = "./SAM_2_Medical_3D/sam2_hiera_l.yaml"
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    sam2_checkpoint = os.path.join(BASE_DIR, "SAM_2_Medical_3D", "sam2_hiera_large.pt")
+    model_cfg = os.path.join(BASE_DIR, "SAM_2_Medical_3D", "sam2_configs", "sam2_hiera_l.yaml")
 
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
 
