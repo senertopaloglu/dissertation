@@ -41,3 +41,5 @@ windows cmd: `pydoctor --make-html --html-output docs --project-name "Interactiv
 git bash: `pydoctor --make-html --html-output docs --project-name "Interactive 3D Medical Imaging Segmentation" --docformat=google ./*.py`
 3. view documentation: a) `cd docs` b) `start index.html`
 
+DISCLAIMER:
+The segmentation model in this project is intended for advisory purposes only and should not be relied upon as a definitive decision-making tool in clinical or healthcare settings.
