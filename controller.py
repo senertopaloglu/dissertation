@@ -258,10 +258,10 @@ class SegmentationController:
         if self.is_remote:
             # Step 2: Delete folder in modal
             # do not check=True because no graceful handling if folder not exists in modal volume
-            subprocess.run(["modal", "volume", "rm", "-r", "sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
+            subprocess.run(["modal", "volume", "rm", "-r", "my_adapted_sam_2_medical_3d", f"SAM_2_Medical_3D/frames/{foldername}"])
 
             # Step 3: Create folder and transfer files to modal
-            subprocess.run(["modal", "volume", "put", "sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
+            subprocess.run(["modal", "volume", "put", "my_adapted_sam_2_medical_3d", local_folder, f"SAM_2_Medical_3D/frames/{foldername}"], check=True)
 
             # Step 4: Delete local JPG folder and contents
             shutil.rmtree(local_folder)
