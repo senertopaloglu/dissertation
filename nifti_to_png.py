@@ -4,7 +4,7 @@ import numpy as np
 import os
 from PIL import Image
 
-def nifti_to_png(nifti_path, output_folder, axis):
+def nifti_to_png(nifti_path: str, output_folder: str, axis: str) -> None:
     # Load NIfTI image
     img = nib.load(nifti_path)
     img_canonical = nib.as_closest_canonical(img)

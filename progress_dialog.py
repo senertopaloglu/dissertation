@@ -6,7 +6,7 @@ import ttkbootstrap as ttk
 CONTAINER_PREP_ETA = 210  # seconds
 
 class ProgressDialog:
-    def __init__(self, master, title="Progress"):
+    def __init__(self, master: tk.Tk, title: str = "Progress"):
         self.top = ttk.Toplevel(master)
         self.top.title(title)
         self.top.grab_set() # make progress dialog modal
@@ -42,7 +42,7 @@ class ProgressDialog:
 
         self.max_prop = 0
     
-    def update_progress(self):
+    def update_progress(self) -> None:
         
         elapsed = time.time() - self.prep_start_time
         if self.current_progress["Preparing model"] < 100:
@@ -89,5 +89,5 @@ class ProgressDialog:
         if self.top.winfo_exists():
             self.top.after(100, self.update_progress)
         
-    def close(self):
+    def close(self) -> None:
         self.top.destroy()

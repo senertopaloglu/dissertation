@@ -1,8 +1,9 @@
+from typing import Optional
 import SimpleITK as sitk
 import argparse
 
 class DicomToNifti:
-    def convert(self, dicom_folder_path, nifti_file_path):
+    def convert(self, dicom_folder_path: str, nifti_file_path: Optional[str]) -> str:
         reader = sitk.ImageSeriesReader()
         dicom_names = reader.GetGDCMSeriesFileNames(dicom_folder_path)
         reader.SetFileNames(dicom_names)

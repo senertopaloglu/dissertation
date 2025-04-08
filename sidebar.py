@@ -4,8 +4,9 @@ import ttkbootstrap as ttk
 from ttkbootstrap import Frame, Label, Button, Notebook, OptionMenu, Checkbutton
 import matplotlib.pyplot as plt
 
+
 class Sidebar(Frame):
-    def __init__(self, parent, model, view, controller):
+    def __init__(self, parent: tk.Widget, model, view, controller):
         super().__init__(parent, padding=10)
         self.model = model
         self.view = view
@@ -21,7 +22,7 @@ class Sidebar(Frame):
         
         self._build_sidebar()
 
-    def _build_sidebar(self):
+    def _build_sidebar(self) -> None:
         """
         Build and initialize the sidebar UI components.
 
@@ -201,34 +202,34 @@ class Sidebar(Frame):
             tab.btn_export_view.pack(fill="x", pady=2)
 
     # The functions below forward user actions to the controller.
-    def _import_nifti(self):
+    def _import_nifti(self) -> None:
         if self.view:
             self.view.import_nifti()
     
-    def _import_dicom(self):
+    def _import_dicom(self) -> None:
         if self.view:
             self.view.import_dicom()
             
-    def _import_image(self):
+    def _import_image(self) -> None:
         if self.view:
             self.view._import_image()
 
-    def _export_3d_mesh(self):
+    def _export_3d_mesh(self) -> None:
         if self.view:
             self.view._export_3d_mesh()
 
-    def _segment_image(self):
+    def _segment_image(self) -> None:
         if self.view:
             self.view._segment_image()
 
-    def _export_view_with_mask(self):
+    def _export_view_with_mask(self) -> None:
         if self.view:
             self.view._export_view_with_mask()
 
-    def _on_undo_click(self):
+    def _on_undo_click(self) -> None:
         if self.view:
             self.view._on_undo_click()
 
-    def _on_redo_click(self):
+    def _on_redo_click(self) -> None:
         if self.view:
             self.view._on_redo_click()

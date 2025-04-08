@@ -4,13 +4,21 @@ import numpy as np
 
 import torch
 
+from type_aliases import Points, SegmentationResult
 from sam2.build_sam import build_sam2_video_predictor
 
-def run_segmentation(points, frame_idx, foldername, multi_resolution, is_first, is_final):
+def run_segmentation(
+    points: Points,
+    frame_idx: int,
+    foldername: str,
+    multi_resolution: bool,
+    is_first: bool,
+    is_final: bool
+) -> SegmentationResult:
     """
     Runs segmentation on the specified video frames using the provided points.
     
-    Parameters:
+    Args:
         points: A dictionary where keys are object IDs and values are lists of point coordinates and labels.
         frame_idx: The index of the reference frame for segmentation.
         foldername: The folder name containing video frames.
@@ -27,8 +35,9 @@ def run_segmentation(points, frame_idx, foldername, multi_resolution, is_first, 
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
     
-    sam2_checkpoint = "./SAM_2_Medical_3D/sam2_hiera_large.pt"
-    model_cfg = "./SAM_2_Medical_3D/sam2_hiera_l.yaml"
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    sam2_checkpoint = os.path.join(BASE_DIR, "SAM_2_Medical_3D", "sam2_hiera_large.pt")
+    model_cfg = os.path.join(BASE_DIR, "SAM_2_Medical_3D", "sam2_configs", "sam2_hiera_l.yaml")
 
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
 
@@ -86,13 +95,21 @@ def run_segmentation(points, frame_idx, foldername, multi_resolution, is_first, 
     
     return video_segments
 
-def segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final):
+def segment(
+    slices: np.ndarray,
+    points: Points,
+    frame_idx: int,
+    foldername: str,
+    multi_resolution: bool,
+    is_first: bool,
+    is_final: bool
+) -> SegmentationResult:
     """
     Invokes segmentation on frames using provided annotation points.
     This function is a wrapper that forwards the segmentation task to the
     local handler that runs the model locally.
 
-    Parameters:
+    Args:
         slices: Unused parameter for segmentation slices.
         points: A dictionary where keys are object IDs and values are lists of point coordinates and labels.
         frame_idx: The index of the reference frame for segmentation.

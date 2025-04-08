@@ -1,7 +1,14 @@
 import os
 from collections import defaultdict
+from typing import Any, Callable, Optional, Union
 
+from matplotlib.axes import Axes
+from matplotlib.backend_bases import MouseEvent
+from matplotlib.lines import Line2D
+
+from type_aliases import SegmentationResult
 from export_format import ExportFormat
+from model import ImageModel
 from sidebar import Sidebar
 
 import tkinter as tk
@@ -85,7 +92,7 @@ class MainView(Window):
         # Behavior for closing
         self.protocol("WM_DELETE_WINDOW", self._on_close)        
 
-    def _build_image_frames(self):
+    def _build_image_frames(self) -> None:
         """
         Builds the frames that display the axial, coronal, sagittal, and
         (placeholder) mesh view.
@@ -109,7 +116,7 @@ class MainView(Window):
         self.update_idletasks()
         self.update()
     
-    def show_mask(self, mask, ax, obj_id=None, random_color=False):
+    def show_mask(self, mask: np.ndarray, ax: Axes, obj_id: Optional[int] = None, random_color: bool = False) -> None:
         """
         Render and display a segmentation mask overlay on the given matplotlib Axes.
 
@@ -133,7 +140,7 @@ class MainView(Window):
         mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
         ax.imshow(mask_image)
 
-    def _create_image_frame(self, text, axis):
+    def _create_image_frame(self, text: str, axis: int) -> Frame:
         """
         Creates a labeled frame containing a Matplotlib FigureCanvas along with a slider 
         and checkboxes to control the display of segmentation masks and points.
@@ -238,7 +245,7 @@ class MainView(Window):
 
         return outer_frame
     
-    def _create_mesh_view_frame(self, text):
+    def _create_mesh_view_frame(self, text: str) -> Frame:
         """
         Creates and returns a dedicated frame for the 3D mesh view.
 
@@ -273,7 +280,7 @@ class MainView(Window):
         return outer_frame
 
 
-    def _update_slice(self, ax, canvas, axis, val, text):
+    def _update_slice(self, ax: Axes, canvas: FigureCanvasTkAgg, axis: int, val: Union[int, str], text: str) -> None:
         """
         Update the displayed slice in the given axis whenever the slider changes.
 
@@ -326,7 +333,7 @@ class MainView(Window):
         self.update_idletasks()
         self.update()
 
-    def import_nifti(self):
+    def import_nifti(self) -> None:
         """
         Opens a file dialog to select a .nii file and loads it.
         """
@@ -340,7 +347,7 @@ class MainView(Window):
         else:
             tk.messagebox.showerror("Import Error", "Please select a valid NIfTI file.")
     
-    def import_dicom(self):
+    def import_dicom(self) -> None:
         """
         Opens a file dialog to select a folder containing DICOM files and loads it.
         """
@@ -360,7 +367,7 @@ class MainView(Window):
                 "The selected folder does not contain any DICOM files."
             )
 
-    def _import_image(self):
+    def _import_image(self) -> None:
         """
         Opens a file dialog to select a .nii file and loads it.
         """
@@ -391,7 +398,7 @@ class MainView(Window):
                 "The selected folder does not contain any DICOM files."
             )
 
-    def _segment_image(self):
+    def _segment_image(self) -> None:
         """
         Perform image segmentation on the currently selected slice and annotated points.
         """
@@ -460,7 +467,7 @@ class MainView(Window):
 
             self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix, is_final=True, is_global=False)
     
-    def show_image(self):
+    def show_image(self) -> None:
         """Re-initializes and displays all image frames for the current image.
 
         This method builds the image frames (axial, coronal, sagittal, and 3D mesh)
@@ -470,7 +477,7 @@ class MainView(Window):
         self._build_image_frames()
         
     
-    def show_segmentation(self, segmentation_mask, axis_str_suffix):
+    def show_segmentation(self, segmentation_mask: SegmentationResult, axis_str_suffix: str) -> None:
         """
         Display the segmentation mask in view of self.last_used_axis.
 
@@ -504,23 +511,23 @@ class MainView(Window):
 
         self._update_slice(canvas.figure.axes[0], canvas, axis_num, slice_idx, label)      
 
-    def set_on_click_callback(self, callback):
+    def set_on_click_callback(self, callback: Callable[[Any, str, Any], None]) -> None:
         """Sets the callback invoked on mouse click in the figure."""
         self._on_click_callback = callback
 
-    def set_undo_callback(self, callback):
+    def set_undo_callback(self, callback: Callable[[], None]) -> None:
         """Sets the callback invoked when the user clicks Undo."""
         self._undo_callback = callback
 
-    def set_redo_callback(self, callback):
+    def set_redo_callback(self, callback: Callable[[], None]) -> None:
         """Sets the callback invoked when the user clicks Redo."""
         self._redo_callback = callback
 
-    def set_slice_request_callback(self, callback):
+    def set_slice_request_callback(self, callback: Callable[[int, int], Any]) -> None:
         """Sets the callback to request a slice from the Model via the Controller."""
         self._slice_request_callback = callback
 
-    def _on_click(self, event, ax, canvas):
+    def _on_click(self, event: MouseEvent, ax: Axes, canvas: FigureCanvasTkAgg) -> None:
         """
         Internal method to pass click events to the controller's on_click.
 
@@ -554,17 +561,17 @@ class MainView(Window):
         # Redraw after any changes
         canvas.draw()
 
-    def _on_undo_click(self):
+    def _on_undo_click(self) -> None:
         """Sets the callback invoked on undo button click."""
         if self._undo_callback:
             self._undo_callback()
 
-    def _on_redo_click(self):
+    def _on_redo_click(self) -> None:
         """Sets the callback invoked on redo button click."""
         if self._redo_callback:
             self._redo_callback()
 
-    def add_point_to_listbox(self, x, y, pos_flag, color=None, active_index=None):
+    def add_point_to_listbox(self, x: float, y: float, pos_flag: int, color: Optional[str] = None, active_index: Optional[int] = None) -> None:
         if active_index is None:
             active_index = self.sidebar.tabControl.index("current")
         current_tab = self.sidebar.tabs[active_index]
@@ -584,7 +591,7 @@ class MainView(Window):
         canvas = self._get_canvas(active_index)
         canvas.show_points_checkbox.config(state="normal")
 
-    def remove_last_point_from_listbox(self):
+    def remove_last_point_from_listbox(self) -> None:
         active_index = self.sidebar.tabControl.index("current")
         current_tab = self.sidebar.tabs[active_index]
         if current_tab.points_listbox.size() > 0:
@@ -595,7 +602,7 @@ class MainView(Window):
 
         self.update_global_segmentation_state()
 
-    def clear_listbox(self):
+    def clear_listbox(self) -> None:
         active_index = self.sidebar.tabControl.index("current")
         current_tab = self.sidebar.tabs[active_index]
         current_tab.points_listbox.delete(0, "end")
@@ -606,7 +613,7 @@ class MainView(Window):
         if canvas and hasattr(canvas, 'show_points_checkbox'):
             canvas.show_points_checkbox.config(state="disabled")
 
-    def plot_point(self, x, y, color, ax=None):
+    def plot_point(self, x: float, y: float, color: str, ax: Optional[Axes] = None) -> Line2D:
         """
         Plot the point on the specified Matplotlib Axes
         If no Axes object is provided, it defaults to the current active Axes.
@@ -625,7 +632,7 @@ class MainView(Window):
             ax = plt.gca()
         return ax.plot(x, y, marker='o', color=color.lower())[0]
 
-    def draw_canvas(self, ax_idx=None):
+    def draw_canvas(self, ax_idx: Optional[int] = None) -> None:
         """
         Redraw the Matplotlib figure for the specified view.
 
@@ -649,7 +656,7 @@ class MainView(Window):
             canvas = plt.gcf().canvas  # fallback, though it should not happen
         canvas.draw()
 
-    def reset_views(self):
+    def reset_views(self) -> None:
         """
         Force a refresh of all image frames to remove any residual points.
         """
@@ -673,7 +680,7 @@ class MainView(Window):
             except Exception as e:
                 print("Error resetting sagittal view:", e)
     
-    def update_mesh_view(self, video_segments, axis_str_suffix):
+    def update_mesh_view(self, video_segments: SegmentationResult, axis_str_suffix: str) -> None:
         """
         Update mesh view with the segmentation result and update the label to
         reflect the view used for segmentation.
@@ -743,7 +750,7 @@ class MainView(Window):
         # store the segmentation result for later exporting
         self.last_video_segments = video_segments
     
-    def _export_3d_mesh(self):
+    def _export_3d_mesh(self) -> None:
         """
         Exports the 3D mesh currently displayed in the mesh view as an STL file.
         Uses the latest segmentation (stored in self.last_video_segments)
@@ -808,7 +815,7 @@ class MainView(Window):
         exported_mesh.save(export_filename)
         tk.messagebox.showinfo("Export Successful", f"3D mesh exported as '{export_filename}'.")
 
-    def _export_view_with_mask(self):
+    def _export_view_with_mask(self) -> None:
         """
         Exports the original image with overlayed segmentation mask in the active view
         as a 3D NIfTI file.
@@ -837,7 +844,7 @@ class MainView(Window):
         confirm_button = ttk.Button(popup, text="OK", command=on_confirm, bootstyle="info")
         confirm_button.pack(pady=10)
         
-    def _export_view_with_mask_process(self, chosen_format: ExportFormat):
+    def _export_view_with_mask_process(self, chosen_format: ExportFormat) -> None:
         """
         Carries out the export process using the chosen format:
           - BINARY: Convert composite volume to binary image.
@@ -961,7 +968,7 @@ class MainView(Window):
         nib.save(nii_img, export_filename)
         tk.messagebox.showinfo("Export Successful", f"Image with segmentation overlay exported as:\n{export_filename}")
     
-    def _get_canvas(self, axis):
+    def _get_canvas(self, axis: int) -> FigureCanvasTkAgg:
         """
         Returns the canvas corresponding to the specified axis.
 
@@ -980,7 +987,7 @@ class MainView(Window):
         else:
             raise ValueError("Invalid axis number. Must be 0, 1, or 2.")
         
-    def _get_mask(self, axis):
+    def _get_mask(self, axis: int) -> SegmentationResult:
         """
         Returns the canvas corresponding to the specified axis.
 
@@ -999,7 +1006,7 @@ class MainView(Window):
         else:
             raise ValueError("Invalid axis number. Must be 0, 1, or 2.")
 
-    def clear_mesh_view(self):
+    def clear_mesh_view(self) -> None:
         """
         Clears the 3D mesh view (i.e. removes any previously segmented mesh).
         """
@@ -1018,7 +1025,7 @@ class MainView(Window):
         for tab in self.sidebar.tabs:
             tab.global_segmentation_checkbox.config(state=state)
 
-    def _on_close(self):
+    def _on_close(self) -> None:
         """
         Called when the user closes the window via the title bar or otherwise.
         """
