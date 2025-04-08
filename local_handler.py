@@ -18,7 +18,7 @@ def run_segmentation(
     """
     Runs segmentation on the specified video frames using the provided points.
     
-    Parameters:
+    Args:
         points: A dictionary where keys are object IDs and values are lists of point coordinates and labels.
         frame_idx: The index of the reference frame for segmentation.
         foldername: The folder name containing video frames.
@@ -109,7 +109,7 @@ def segment(
     This function is a wrapper that forwards the segmentation task to the
     local handler that runs the model locally.
 
-    Parameters:
+    Args:
         slices: Unused parameter for segmentation slices.
         points: A dictionary where keys are object IDs and values are lists of point coordinates and labels.
         frame_idx: The index of the reference frame for segmentation.
