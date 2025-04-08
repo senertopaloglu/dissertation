@@ -7,7 +7,7 @@ import glob
 import cv2
 from metrics import dice_coefficient, new_assd, DICE
 
-def load_mask(filepath):
+def load_mask(filepath: str) -> np.ndarray:
     """
     Load a PNG image and binarize it.
     """
@@ -20,7 +20,7 @@ def load_mask(filepath):
     # Binarize: consider any nonzero pixel as foreground.
     return (data > 0).astype(np.uint8)
 
-def png_series_reader(dir):
+def png_series_reader(dir: str) -> np.ndarray:
     V = []
     png_file_list=glob.glob(dir + '/*.png')
     png_file_list.sort()

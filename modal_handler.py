@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 
 import modal
 
+from type_aliases import Points, SegmentationResult
+
 cuda_version = "12.2.2"  # should be no greater than host CUDA version
 flavor = "devel"  #  includes full CUDA toolkit
 operating_sys = "ubuntu22.04"
@@ -36,7 +38,14 @@ app = modal.App("example-3")
 
 
 @app.function(gpu="L4", image=image, volumes={"/root/temp":vol}, timeout=1000, mounts=[])
-def do_some_magic(points, frame_idx, foldername, multi_resolution, is_first, is_final):
+def do_some_magic(
+    points: Points,
+    frame_idx: int,
+    foldername: str,
+    multi_resolution: bool,
+    is_first: bool,
+    is_final: bool
+) -> SegmentationResult:
     import subprocess
     
     os.chdir(os.path.expanduser("temp/SAM_2_Medical_3D"))
@@ -143,7 +152,15 @@ def do_some_magic(points, frame_idx, foldername, multi_resolution, is_first, is_
 
     return video_segments
 
-def segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final):
+def segment(
+    slices: np.ndarray,
+    points: Points,
+    frame_idx: int,
+    foldername: str,
+    multi_resolution: bool,
+    is_first: bool,
+    is_final: bool
+) -> SegmentationResult:
     """
     Invoke remote segmentation on video frames using provided annotation points.
 

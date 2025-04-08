@@ -4,9 +4,17 @@ import numpy as np
 
 import torch
 
+from type_aliases import Points, SegmentationResult
 from sam2.build_sam import build_sam2_video_predictor
 
-def run_segmentation(points, frame_idx, foldername, multi_resolution, is_first, is_final):
+def run_segmentation(
+    points: Points,
+    frame_idx: int,
+    foldername: str,
+    multi_resolution: bool,
+    is_first: bool,
+    is_final: bool
+) -> SegmentationResult:
     """
     Runs segmentation on the specified video frames using the provided points.
     
@@ -87,7 +95,15 @@ def run_segmentation(points, frame_idx, foldername, multi_resolution, is_first, 
     
     return video_segments
 
-def segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final):
+def segment(
+    slices: np.ndarray,
+    points: Points,
+    frame_idx: int,
+    foldername: str,
+    multi_resolution: bool,
+    is_first: bool,
+    is_final: bool
+) -> SegmentationResult:
     """
     Invokes segmentation on frames using provided annotation points.
     This function is a wrapper that forwards the segmentation task to the

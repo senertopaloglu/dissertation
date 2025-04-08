@@ -4,8 +4,14 @@ import os
 import subprocess
 import contextlib
 import threading
+from typing import Any, Callable, Optional
+from type_aliases import Points, SegmentationResult
+
+from matplotlib.axes import Axes
+from matplotlib.backend_bases import MouseEvent
 
 from dicom_to_nifti import DicomToNifti
+from model import ImageModel
 from stdout_capture import StdoutCapture
 from progress_dialog import ProgressDialog
 
@@ -17,6 +23,8 @@ from ttkbootstrap.constants import * # colors and styles
 
 import cv2
 import numpy as np
+
+from view import MainView
 try:
     import nibabel as nib
 except ImportError:
@@ -45,7 +53,7 @@ class SegmentationController:
         self.view.set_slice_request_callback(self.handle_slice_request)
         
 
-    def load_image(self, file_path, is_nifti=True):
+    def load_image(self, file_path: str, is_nifti: bool = True) -> None:
         """
         Loads the image from the given file path into the model.
         """
@@ -58,14 +66,14 @@ class SegmentationController:
         # clear the mesh view so that it stays empty until segmentation is done.
         self.view.clear_mesh_view()
 
-    def handle_slice_request(self, axis, slice_index):
+    def handle_slice_request(self, axis: int, slice_index: int):
         """
         Called by the View whenever a slider is moved to change slices.
         We simply go to the Model, get the requested slice, and hand it back.
         """
         return self.model.get_slice(axis, slice_index)
 
-    def on_click(self, event, pointer_color, ax):
+    def on_click(self, event: MouseEvent, pointer_color: str, ax: Axes) -> None:
         """
         Callback for mouse clicks on the matplotlib canvas.
         This is where we record the point location and update the view.
@@ -108,7 +116,7 @@ class SegmentationController:
             current_tab.pos_click_var.set(True)
             current_tab.pos_click_checkbox.config(state="disabled")
 
-    def undo(self):
+    def undo(self) -> None:
         """
         Undo the last point addition.
         """
@@ -144,7 +152,7 @@ class SegmentationController:
         slice_idx = int(canvas.slider.get())
         self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
 
-    def redo(self):
+    def redo(self) -> None:
         """
         Redo the last undone point addition.
         """
@@ -178,7 +186,7 @@ class SegmentationController:
         slice_idx = int(canvas.slider.get())
         self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
     
-    def refresh_selection_state(self):
+    def refresh_selection_state(self) -> None:
         # Iterate over all tabs and reset their state.
         for tab in self.view.sidebar.tabs:
             # Clear the Listbox (if it exists)
@@ -206,7 +214,20 @@ class SegmentationController:
         if hasattr(self.view, "sagittal_view") and hasattr(self.view.sagittal_view.canvas, "show_points_checkbox"):
             self.view.sagittal_view.canvas.show_points_checkbox.config(state="disabled")
 
-    def segment_image(self, slices, points, frame_idx, axis_str_suffix, custom_filename=None, completion_callback=None, downsampled=False, multi_resolution=False, is_first=False, is_final=False, progress_title=None):
+    def segment_image(
+        self, 
+        slices: np.ndarray, 
+        points: Points, 
+        frame_idx: int, 
+        axis_str_suffix: str, 
+        custom_filename: Optional[str] = None, 
+        completion_callback: Optional[Callable[[Any], None]]=None, 
+        downsampled: bool = False, 
+        multi_resolution: bool = False, 
+        is_first: bool = False, 
+        is_final: bool = False, 
+        progress_title: Optional[str] = None
+    ) -> None:
         """
         Calls the model to segment the image based on the user's clicks.
         """
@@ -267,14 +288,26 @@ class SegmentationController:
         
         self.run_segmentation_with_progress(slices, points_grouped, frame_idx, axis_str_suffix, foldername, completion_callback, multi_resolution, is_first, is_final, progress_title)
     
-    def run_segmentation_with_progress(self, slices, points, frame_idx, axis_str_suffix, foldername, completion_callback=None, multi_resolution=False, is_first=False, is_final=False, progress_title=None):
+    def run_segmentation_with_progress(
+        self,
+        slices: np.ndarray, 
+        points: Points, 
+        frame_idx: int, 
+        axis_str_suffix: str, 
+        foldername: str, 
+        completion_callback: Optional[Callable[[Any], None]] = None, 
+        multi_resolution: bool = False, 
+        is_first: bool = False, 
+        is_final: bool = False, 
+        progress_title: Optional[str] = None
+    ) -> None:
         # create progress dialog as a child of the main view
         progress_dialog = ProgressDialog(self.view, title=progress_title if progress_title is not None else "Progress")
         progress_dialog.top.transient(self.view)
         progress_dialog.update_progress() # start polling the progress queue
 
         # runs in a separate thread
-        def run_segmentation():
+        def run_segmentation() -> None:
             capture = StdoutCapture(sys.stdout, progress_dialog.progress_queue)
             try:
                 # redirect stdout to capture progress messages
@@ -300,7 +333,7 @@ class SegmentationController:
             except Exception as e:
                 self.view.after(0, lambda: tk.messagebox.showerror("Segmentation Error", f"An exception occurred in the container:\n{e}"))
     
-        def finish_segmentation(video_segments):
+        def finish_segmentation(video_segments: SegmentationResult) -> None:
             progress_dialog.close()
             if completion_callback:
                 completion_callback(video_segments)
@@ -312,7 +345,7 @@ class SegmentationController:
         seg_thread.start()
     
     # multiresolution segmentation routine
-    def multiresolution_segmentation(self, tab):
+    def multiresolution_segmentation(self, tab: int) -> None:
         if self.model.image is None:
             messagebox.showerror("Error", "No image loaded.")
             return
@@ -371,7 +404,7 @@ class SegmentationController:
             seeds.setdefault(obj_id, []).append((temp_scale_x, temp_scale_y, pos_flag))
 
         # helper: downsample the entire volume for the selected view
-        def downsample_volume(res):
+        def downsample_volume(res: int) -> np.ndarray:
             if axis == 0:
                 N = full_image.shape[0]
                 vol = np.zeros((N, res, res), dtype=full_image.dtype)
@@ -392,7 +425,7 @@ class SegmentationController:
                 return vol
 
         # helper: compute upsample size based on current resolution and original size
-        def upsample_target(current, original):
+        def upsample_target(current: int, original: int) -> int:
             standards = [64,128,256,512,1024]
             for s in standards:
                 if s > current and s <= original:
@@ -402,7 +435,7 @@ class SegmentationController:
         most_recent_video_segments = None
 
         # This inner function performs one iteration.
-        def iteration(resolution, seeds):
+        def iteration(resolution: int, seeds: Points) -> None:
             if resolution > max(original_h, original_w):
                 def show_final():
                     nonlocal most_recent_video_segments
@@ -447,7 +480,7 @@ class SegmentationController:
                 progress_title=f"Progress {resolution}x{resolution}"
             )
 
-            def check_result():
+            def check_result() -> None:
                 nonlocal most_recent_video_segments
                 if 'video_segments' in result_container:
                     video_segments = result_container['video_segments']

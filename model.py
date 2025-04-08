@@ -1,17 +1,18 @@
 import itk
+import numpy as np
 
 class ImageModel:
     """
     The Model in our MVC. Responsible for loading the ITK image and providing
     slices for visualization.
     """
-    def __init__(self, filename):
+    def __init__(self, filename: str):
         self.filename = filename
         self.image = None
         if filename:
             self._load_image()
 
-    def _load_image(self):
+    def _load_image(self) -> None:
         """
         Load a 3D image from a file using ITK.
         """
@@ -24,11 +25,11 @@ class ImageModel:
         reader.Update()
         self.image = reader.GetOutput()
     
-    def change_image(self, filename):
+    def change_image(self, filename: str) -> None:
         self.filename = filename
         self._load_image()
 
-    def get_slice(self, axis, slice_index):
+    def get_slice(self, axis: int, slice_index: int) -> np.ndarray:
         """
         Extract a 2D slice from the 3D image.
 

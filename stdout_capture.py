@@ -1,12 +1,18 @@
+from queue import Queue
 import re
+from typing import TextIO, Tuple
+
+
+ProgressState = Tuple[str, int] # (state name, percent)
+ProgressQueue = Queue[ProgressState]
 
 class StdoutCapture:
-    def __init__(self, original_stdout, progress_queue):
+    def __init__(self, original_stdout: TextIO, progress_queue: ProgressQueue):
         self.original_stdout = original_stdout
         self.progress_queue = progress_queue
         self.buffer = ""
     
-    def write(self, text):
+    def write(self, text: str) -> None:
         self.original_stdout.write(text)
         self.original_stdout.flush()
         self.buffer += text
@@ -16,7 +22,7 @@ class StdoutCapture:
                 self.process_line(line)
             self.buffer = lines[-1]
     
-    def process_line(self, line):
+    def process_line(self, line: str) -> None:
         # look for "frame loading" messages
         m = re.search(r"frame loading \(JPEG\):\s*(\d+)%", line)
         if m:
@@ -31,5 +37,5 @@ class StdoutCapture:
         if "Successfully installed" in line:
             self.progress_queue.put(("Preparing model", 100))
     
-    def flush(self):
+    def flush(self) -> None:
         self.original_stdout.flush()

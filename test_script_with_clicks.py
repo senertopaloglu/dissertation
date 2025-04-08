@@ -50,14 +50,14 @@ def main():
     # Load the ground truth
     gt_img = nib.load(args.ground_truth)
     gt_data = gt_img.get_fdata()
-    gt_slice = extract_slice(gt_data, axis, args.slice)
+    #gt_slice = extract_slice(gt_data, axis, args.slice)
     
     # Binarize ground truth and segmentation mask if they are not already binary.
-    seg_mask_bin = (seg_mask > 0).astype(np.uint8)
-    gt_mask_bin = (gt_slice > 0).astype(np.uint8)
+    #seg_mask_bin = (seg_mask > 0).astype(np.uint8)
+    #gt_mask_bin = (gt_slice > 0).astype(np.uint8)
     
-    dice = dice_coefficient(gt_mask_bin, seg_mask_bin)
-    print(f"DICE Coefficient: {dice:.4f}")
+    #dice = dice_coefficient(gt_mask_bin, seg_mask_bin)
+    #print(f"DICE Coefficient: {dice:.4f}")
 
 if __name__ == '__main__':
     main()
