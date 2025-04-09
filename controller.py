@@ -8,6 +8,7 @@ import threading
 from typing import Any, Callable, Optional
 from type_aliases import Points, SegmentationResult
 
+import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import MouseEvent
 
@@ -354,9 +355,9 @@ class SegmentationController:
             messagebox.showerror("Error", "Invalid axis.")
             return
 
-        start_res = 64
+        start_res = 128
         if original_h < start_res or original_w < start_res:
-            messagebox.showerror("Downsampling Error", "Image is too small to downsample to 64x64.")
+            messagebox.showerror("Downsampling Error", "Image is too small to downsample to 128x128.")
             return
 
         current_res = start_res
@@ -401,6 +402,16 @@ class SegmentationController:
                 temp_scale_y = int(y * current_res / original_h)
                 seeds.setdefault(obj_id, []).append((temp_scale_x, temp_scale_y, pos_flag))
 
+        original_click_counts = {}
+        if self.view.sidebar.global_segmentation_var.get():
+            for obj_id, pts_dict in seeds.items():
+                count = sum(1 for pt in pts_dict.get(slice_idx, []) if pt[2] == 1)
+                original_click_counts[obj_id] = max(5,count)
+        else:
+            for obj_id, pts in seeds.items():
+                count = sum(1 for pt in pts if pt[2] == 1)
+                original_click_counts[obj_id] = max(5,count)
+
         # helper: downsample the entire volume for the selected view
         def downsample_volume(res: int) -> np.ndarray:
             if axis == 0 or self.view.sidebar.global_segmentation_var.get():
@@ -424,7 +435,7 @@ class SegmentationController:
 
         # helper: compute upsample size based on current resolution and original size
         def upsample_target(current: int, original: int) -> int:
-            standards = [64,128,256,512,1024]
+            standards = [128,256,512,1024]
             for s in standards:
                 if s > current and s <= original:
                     return s
@@ -502,6 +513,26 @@ class SegmentationController:
                             seg_mask_down = seg_mask_down.astype(np.uint8)
                         upsampled_masks[obj_id] = cv2.resize(seg_mask_down, (original_w, original_h), interpolation=cv2.INTER_NEAREST)
 
+                        # for debugging: display upsampled mask in temorary popup figure
+                        plt.figure(figsize=(12, 8))
+                        plt.title(f"Upsampled Segmentation Mask overlayed on original image with seeds")
+                        if axis == 0 or self.view.sidebar.global_segmentation_var.get():
+                            plt.imshow(downsampled_volume[slice_idx, :, :])
+                        elif axis == 1:
+                            plt.imshow(downsampled_volume[:, slice_idx, :])
+                        else:
+                            plt.imshow(downsampled_volume[:, :, slice_idx])
+                        plt.imshow(seg_mask_down, alpha=0.5)
+                        if isinstance(seeds[obj_id], dict):
+                            pts_list = seeds[obj_id].get(slice_idx, [])
+                        else:
+                            pts_list = seeds[obj_id]
+                        mpl_color = {1:"r",2:"b",3:"g",4:"orange",5:"purple",6:"c",7:"m",8:"teal",9:"k",10:"gray"}.get(obj_id, "r")
+                        xs = [int(p[0]) for p in pts_list]
+                        ys = [int(p[1]) for p in pts_list] 
+                        plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
+                        plt.show(block=True)
+
                     # auto compute new seeds for each object
                     new_seeds = {}
                     for obj_id in seeds.keys():
@@ -510,45 +541,63 @@ class SegmentationController:
                             if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
                                 seg_mask_down = seg_mask_down[0]
                             mask_uint8 = (seg_mask_down > 0).astype(np.uint8) * 255
-                            contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                            
+                            # erode mask to get inner contour
+                            kernel = np.ones((3, 3), np.uint8)
+                            eroded_mask_uint8 = cv2.erode(mask_uint8, kernel, iterations=2)
+
+                            # find contours of the eroded mask
+                            contours, _ = cv2.findContours(eroded_mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                             if contours:
                                 contour = max(contours, key=cv2.contourArea)
-                                # use centroid of the largest segmentation mask
-                                M = cv2.moments(contour)
-                                if M["m00"] != 0:
-                                    cx = int(M["m10"] / M["m00"])
-                                    cy = int(M["m01"] / M["m00"])
-                                    if self.view.sidebar.global_segmentation_var.get():
-                                        # if global segmentation, use the original image size
-                                        cx = int(cx * (original_w / resolution))
-                                        cy = int(cy * (original_h / resolution))
-                                        new_seeds[obj_id] = defaultdict(list)
-                                        new_seeds[obj_id][int(self.view.axial_view.canvas.slider.get())] = [(cx, cy, 1)]
-                                    else:
-                                        new_seeds[obj_id] = [(cx, cy, 1)]
-                                    print("new seeds in m00")
+                                sampled_points = []
+
+                                # sample N points evenly along the contour
+                                base_N = original_click_counts.get(obj_id, 5)
+                                if resolution == 128:
+                                    N = base_N
+                                elif resolution == 256:
+                                    N = base_N + 2
                                 else:
-                                    new_seeds[obj_id] = seeds[obj_id]
-                                    print("new seeds in m00 else")
+                                    N = base_N + 3
+
+                                if len(contour) >= N:
+                                    step = len(contour) // N
+                                    selected = contour[::step][:N]
+                                else:
+                                    selected = contour
+                                
+                                for pt in selected:
+                                    cx, cy = pt[0] # contour points have shape (N, 1, 2)
+                                    # upscale to original image size
+                                    cx = int(cx * 2)
+                                    cy = int(cy * 2)
+                                    if self.view.sidebar.global_segmentation_var.get():
+                                        new_seeds.setdefault(obj_id, defaultdict(list))
+                                        new_seeds[obj_id][int(self.view.axial_view.canvas.slider.get())].append((cx, cy, 1))
+                                    else:
+                                        new_seeds.setdefault(obj_id, []).append((cx, cy, 1))
                             else:
                                 # if no contours found then use the original seed
                                 new_seeds[obj_id] = seeds[obj_id]
-                                print("new seeds in contours else")
                         else:
                             # if segmentation mask is not returned then use the original seed
                             new_seeds[obj_id] = seeds[obj_id]
-                            print("new seeds in seg_mask_down else")
                     
                     # for debugging: display new seed in temorary popup figure
-                    # plt.figure(figsize=(12, 8))
-                    # plt.title(f"New Seed Points")
-                    # plt.imshow(original_image)
-                    # for obj_id, pts in new_seeds.items():
-                    #     mpl_color = {1:"r",2:"b",3:"g",4:"orange",5:"purple",6:"c",7:"m",8:"y",9:"k",10:"gray"}.get(obj_id, "r")
-                    #     xs = [int(p[0]*(original_w/resolution)) for p in pts]
-                    #     ys = [int(p[1]*(original_h/resolution)) for p in pts]
-                    #     plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
-                    # plt.close() 
+                    plt.figure(figsize=(12, 8))
+                    plt.title(f"New Seed Points")
+                    plt.imshow(original_image)
+                    for obj_id, pts in new_seeds.items():
+                        mpl_color = {1:"r",2:"b",3:"g",4:"orange",5:"purple",6:"c",7:"m",8:"teal",9:"k",10:"gray"}.get(obj_id, "r")
+                        if isinstance(pts, dict):
+                            pts_list = pts.get(slice_idx, [])
+                        else:
+                            pts_list = pts
+                        xs = [int(p[0]) for p in pts_list]
+                        ys = [int(p[1]) for p in pts_list] 
+                        plt.gca().scatter(xs, ys, color=mpl_color, marker='*', s=200, edgecolor='white', linewidth=1.25)
+                    plt.show(block=True)
 
                     new_res = resolution * 2
                     iteration(new_res, new_seeds)
