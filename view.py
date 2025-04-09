@@ -591,6 +591,8 @@ class MainView(Window):
         canvas = self._get_canvas(active_index)
         canvas.show_points_checkbox.config(state="normal")
 
+        self.update_global_segmentation_state()
+
     def remove_last_point_from_listbox(self) -> None:
         active_index = self.sidebar.tabControl.index("current")
         current_tab = self.sidebar.tabs[active_index]

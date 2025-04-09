@@ -18,7 +18,7 @@ class Sidebar(Frame):
         self.import_icon = tk.PhotoImage(file=os.path.join("images", "import.png"))
         self.export_icon = tk.PhotoImage(file=os.path.join("images", "export.png"))
 
-        self.global_segmentation_var = ttk.BooleanVar(value=True)
+        self.global_segmentation_var = ttk.BooleanVar(value=False)
         
         self._build_sidebar()
 
