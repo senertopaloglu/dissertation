@@ -35,19 +35,26 @@ def nifti_to_jpg(nifti_path: str, output_folder: str, axis: str, downsampled: bo
             slice_axis = 2
             axis_lower = 'axial'
 
+    num_slices = data.shape[slice_axis]
+
     # Iterate through each slice
     for i in range(data.shape[slice_axis]):
+        if axis_lower in ['coronal', 'sagittal']:
+            idx = num_slices - i - 1
+        else:
+            idx = i
+
         if slice_axis == 0:
-            slice_img = data[i, :, :]
+            slice_img = data[idx, :, :]
             if not downsampled:
                 slice_img = np.rot90(slice_img, k=1)  # Rotate 90 degrees once, counter-clockwise
                 slice_img = np.flipud(slice_img)          # Flip vertically
                 slice_img = np.fliplr(slice_img)
         elif slice_axis == 1:
-            slice_img = data[:, i, :]
+            slice_img = data[:, idx, :]
             slice_img = np.rot90(slice_img, k=-1)  # Rotate 90 degrees once, clockwise
-        else: # axia;
-            slice_img = data[:, :, i]
+        else: # axial
+            slice_img = data[:, :, idx]
             slice_img = np.rot90(slice_img, k=1)
             slice_img = np.fliplr(slice_img)
         
