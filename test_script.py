@@ -73,7 +73,7 @@ def main():
                 gt_path = temp_gt_name
                 actual_gt_name = expected_gt_name
         elif args.modality == 'MR':
-            pattern = re.compile(r'IMG-\d{4}-' + f'{slice_idx:05d}' + r'\.png')
+            pattern = re.compile(r'IMG-\d{4}-' + f'{(slice_idx+1):05d}' + r'\.png')
             for f in os.listdir(args.ground_truth_dir):
                 if pattern.match(f):
                     gt_path = os.path.join(args.ground_truth_dir, f)
