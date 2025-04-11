@@ -916,11 +916,9 @@ class MainView(Window):
                         composite[binary_mask] = 255  # Set the mask area to white
                     elif chosen_format == ExportFormat.GRAYSCALE:
                         gray_val = grayscale_mapping.get(obj_id, 0)
-                        overlay = np.zeros_like(composite)
-                        overlay[:, :, 0] = gray_val
-                        overlay[:, :, 1] = gray_val
-                        overlay[:, :, 2] = gray_val
-                        composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
+                        overlay = np.full_like(composite, gray_val)
+                        # only update pixels where mask is active without affecting other overlays
+                        composite = np.where(mask_expanded > 0, (1-alpha) * composite + alpha * overlay, composite)
                     else:
                         # Get pointer color for this object, default to red if missing.
                         color_name = self.pointer_color_mapping.get(obj_id, "red")
