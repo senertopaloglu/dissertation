@@ -20,10 +20,12 @@ def load_mask(filepath: str) -> np.ndarray:
     # Binarize: consider any nonzero pixel as foreground.
     return (data > 0).astype(np.uint8)
 
-def png_series_reader(dir: str) -> np.ndarray:
+def png_series_reader(dir: str, reverse: bool = False) -> np.ndarray:
     V = []
     png_file_list=glob.glob(dir + '/*.png')
     png_file_list.sort()
+    if reverse:
+        png_file_list.reverse()
     for filename in png_file_list: 
         image = cv2.imread(filename,0)
         V.append(image)
@@ -40,6 +42,13 @@ def main():
     parser.add_argument("--modality", required=True, choices=['CT', 'MR'], help="Folder containing ground truth PNG images.")
     parser.add_argument("--dicom_dir", required=True, help="Folder containing DICOM images.")
     args = parser.parse_args()
+
+    if args.modality == 'CT':
+        gt_files = [f for f in os.listdir(args.ground_truth_dir) if re.search(r'liver_GT_\d+\.png$', f)]
+        if not gt_files:
+            print("No ground truth files found in the specified directory.")
+            return
+        max_gt_index = max(int(re.search(r'liver_GT_(\d+)\.png$', f).group(1)) for f in gt_files)
 
     #####################################
     ######### DICE COEFFICIENT ##########
@@ -67,7 +76,7 @@ def main():
         actual_gt_name = None
         
         if args.modality == 'CT':
-            expected_gt_name = f"liver_GT_{slice_idx:03d}.png"
+            expected_gt_name = f"liver_GT_{(max_gt_index - slice_idx):03d}.png"
             temp_gt_name = os.path.join(args.ground_truth_dir, expected_gt_name)
             if os.path.exists(temp_gt_name):
                 gt_path = temp_gt_name
@@ -101,7 +110,11 @@ def main():
     ################ SETUP ###############
     ######################################
 
-    Vref = png_series_reader(args.ground_truth_dir)
+    if args.modality == 'CT':
+        Vref = png_series_reader(args.ground_truth_dir, reverse=True)
+    else:
+        Vref = png_series_reader(args.ground_truth_dir)
+    
     Vseg = png_series_reader(args.input_dir)
 
     ######################################
