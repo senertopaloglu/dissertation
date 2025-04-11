@@ -17,6 +17,7 @@ class Sidebar(Frame):
         self.segment_icon = tk.PhotoImage(file=os.path.join("images", "segment.png"))
         self.import_icon = tk.PhotoImage(file=os.path.join("images", "import.png"))
         self.export_icon = tk.PhotoImage(file=os.path.join("images", "export.png"))
+        self.merge_icon = tk.PhotoImage(file=os.path.join("images", "merge.png"))
 
         self.global_segmentation_var = ttk.BooleanVar(value=False)
         
@@ -34,11 +35,11 @@ class Sidebar(Frame):
         # Import and Export Buttons
         btn_import_nifti = Button(self, text="Import NIfTI File", command=self._import_nifti,
                              bootstyle="primary", image=self.import_icon, compound="left")
-        btn_import_nifti.pack(fill="x", pady=5)
+        btn_import_nifti.pack(fill="x", pady=(5,2))
 
         btn_import_dicom = Button(self, text="Import DICOM Folder", command=self._import_dicom,
                                 bootstyle="primary", image=self.import_icon, compound="left")
-        btn_import_dicom.pack(fill="x", pady=5)
+        btn_import_dicom.pack(fill="x", pady=(2,5))
 
         export_style = ttk.Style()
         export_style.configure("DarkGrey.TButton",
@@ -83,7 +84,7 @@ class Sidebar(Frame):
         tabControl.add(tab1, text="Axial")
         tabControl.add(tab2, text="Coronal")
         tabControl.add(tab3, text="Sagittal")
-        tabControl.pack(fill="x", pady=5)
+        tabControl.pack(fill="x", pady=(0,5))
         self.tabControl = tabControl
         self.tabs = [tab1, tab2, tab3]
 
@@ -111,16 +112,18 @@ class Sidebar(Frame):
             pos_click_checkbox = Checkbutton(content_frame, text="Positive Click", variable=pos_click_var)
             if not self.model.image:
                 pos_click_checkbox.config(state="disabled")
-            pos_click_checkbox.pack(pady=(5, 2))
+            pos_click_checkbox.pack(pady=(2, 0))
             tab.pos_click_checkbox = pos_click_checkbox
 
+
+
             pointer_label = Label(content_frame, text="Pointer colour:")
-            pointer_label.pack(pady=(10, 2))
+            pointer_label.pack(pady=(2, 2))
 
             colors = ["Red", "Blue", "Green", "Orange", "Purple", "Cyan", "Magenta", "Teal", "Black", "Gray"]
 
             tab.pointer_color_optionmenu = OptionMenu(content_frame, pointer_color_var, "")
-            tab.pointer_color_optionmenu.pack(fill="x")
+            tab.pointer_color_optionmenu.pack(fill="x", pady=(0,0))
             tab.pointer_color_optionmenu.configure(textvariable=pointer_color_var)
             menu = tab.pointer_color_optionmenu["menu"]
             menu.delete(0, "end")
@@ -152,8 +155,44 @@ class Sidebar(Frame):
             pointer_color_var.trace_add("write", update_option_menu_color)
             update_option_menu_color()
 
+            separator1 = ttk.Separator(content_frame, orient="horizontal")
+            separator1.pack(fill="x", pady=10)
+
+            tab.draft_selection_var = ttk.BooleanVar(value=False)
+            draft_check = Checkbutton(content_frame, text="Draft Mode", variable=tab.draft_selection_var)
+            draft_check.pack(pady=(0, 2))
+
+            draft_points_label = Label(content_frame, text="Draft Points")
+            draft_points_label.pack(pady=(0, 2))
+
+            draft_points_frame = Frame(content_frame)
+            draft_points_frame.pack(fill="x")
+            draft_scrollbar = ttk.Scrollbar(draft_points_frame, orient="vertical")
+            tab.draft_points_listbox = tk.Listbox(draft_points_frame, height=5, yscrollcommand=draft_scrollbar.set)
+            tab.draft_points_listbox.pack(side="left", fill="x", expand=True)
+            draft_scrollbar.config(command=tab.draft_points_listbox.yview)
+            draft_scrollbar.pack(side="right", fill="y")
+
+            draft_undo_redo_frame = Frame(content_frame)
+            draft_undo_redo_frame.pack(fill="x", pady=2)
+            draft_undo_redo_frame.columnconfigure(0, weight=1)
+            draft_undo_redo_frame.columnconfigure(1, weight=1)
+
+            tab.draft_btn_undo = Button(draft_undo_redo_frame, text="Undo", command=print("Draft Undo Click"),
+                                        bootstyle="info", image=self.undo_icon, compound="left")
+            tab.draft_btn_undo.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+            tab.draft_btn_redo = Button(draft_undo_redo_frame, text="Redo", command=print("Draft Redo Click"),
+                                        bootstyle="info", image=self.redo_icon, compound="left")
+            tab.draft_btn_redo.grid(row=0, column=1, sticky="ew")
+
+            tab.merge_drafts_btn = Button(content_frame, text="Merge Drafts into Selected",
+                                          command=print("Merge Drafts Click"),
+                                          image=self.merge_icon, compound="left",
+                                          style="DarkGreen.TButton")
+            tab.merge_drafts_btn.pack(fill="x", pady=(2, 2))
+
             points_label = Label(content_frame, text="Selected Points")
-            points_label.pack(pady=(10, 2))
+            points_label.pack(pady=(0, 2))
 
             points_frame = Frame(content_frame)
             points_frame.pack(fill="x")
@@ -165,7 +204,7 @@ class Sidebar(Frame):
             scrollbar.pack(side="right", fill="y")
 
             undo_redo_frame = Frame(content_frame)
-            undo_redo_frame.pack(fill="x", pady=2)
+            undo_redo_frame.pack(fill="x", pady=(2, 0))
             undo_redo_frame.columnconfigure(0, weight=1)
             undo_redo_frame.columnconfigure(1, weight=1)
 
@@ -176,13 +215,16 @@ class Sidebar(Frame):
                               bootstyle="info", image=self.redo_icon, compound="left")
             btn_redo.grid(row=0, column=1, sticky="ew")
 
+            separator2 = ttk.Separator(content_frame, orient="horizontal")
+            separator2.pack(fill="x", pady=10)
+
             tab.global_segmentation_checkbox = Checkbutton(
                 content_frame,
                 text="Global view segmentation\n(show on axial view)",
                 variable=self.global_segmentation_var,
                 state="disabled"  # disabled by default
             )
-            tab.global_segmentation_checkbox.pack(fill="x", pady=2)
+            tab.global_segmentation_checkbox.pack(fill="x", pady=(0, 2))
 
             tab.btn_segment = Button(content_frame, text="Segment Image",
                                      command=self._segment_image,
