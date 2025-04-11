@@ -214,7 +214,7 @@ class MainView(Window):
             # checkbox to show/hide segmentation mask, show_mask_var is auto updated on click
             show_mask_checkbox = Checkbutton(
                 control_frame,
-                text="Show Segmentation Mask",
+                text="Show Segmentation Masks",
                 variable=show_mask_var,
                 command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
             )

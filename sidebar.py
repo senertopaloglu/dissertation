@@ -196,7 +196,7 @@ class Sidebar(Frame):
                                           image=self.segment_icon, compound="left", bootstyle="success")
             tab.btn_auto_seg.pack(fill="x", pady=2)
 
-            tab.btn_export_view = ttk.Button(content_frame, text="Export View with\nSegmentation Mask",
+            tab.btn_export_view = ttk.Button(content_frame, text="Export View with\nSegmentation Masks",
                                              command=lambda: self._export_view_with_mask(),
                                              image=self.export_icon, compound="left", style="DarkGrey.TButton")
             tab.btn_export_view.pack(fill="x", pady=2)
