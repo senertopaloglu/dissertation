@@ -100,7 +100,7 @@ class SegmentationController:
         if current_tab.pos_click_checkbox["state"] == "disabled":
             current_tab.pos_click_checkbox["state"] = "normal"
         
-        if current_tab.draft_selection_var.get():
+        if self.view.sidebar.global_draft_mode.get():
             # If in draft mode, do not add the point to the points list.
             current_tab.draft_points.append((x, y, color, pos_flag))
             current_tab.draft_redo_stack.clear()
@@ -737,15 +737,12 @@ class SegmentationController:
         # merge 3d mesh results
         base_mesh = self.view.last_result or {}
         draft_mesh = self.view.last_draft_result or {}
-        for slice_idx, obj_masks in draft_mesh.items():
-            if slice_idx not in base_mesh:
-                base_mesh[slice_idx] = obj_masks.copy()
-            else:
-                base_mesh[slice_idx].update(obj_masks)
+        for obj_id, mesh_data in draft_mesh.items():
+            base_mesh[obj_id] = mesh_data # overwrite or add the draft result
         self.view.last_result = base_mesh
         self.view.last_draft_result = None
 
-        current_tab.draft_selection_var.set(False)
+        self.view.sidebar.global_draft_mode.set(False)
 
         # Update the current view slice to reflect merged points.
         canvas = self.view._get_canvas(active_index)
@@ -753,3 +750,4 @@ class SegmentationController:
         slice_idx = int(canvas.slider.get())
         self.view._update_slice(canvas.figure.axes[0], canvas, active_index, slice_idx, label)
         self.view.update_mesh_view(label)
+        self.view.update_all_views()

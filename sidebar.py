@@ -19,6 +19,7 @@ class Sidebar(Frame):
         self.export_icon = tk.PhotoImage(file=os.path.join("images", "export.png"))
         self.merge_icon = tk.PhotoImage(file=os.path.join("images", "merge.png"))
 
+        self.global_draft_mode = ttk.BooleanVar(value=False)
         self.global_segmentation_var = ttk.BooleanVar(value=False)
         
         self._build_sidebar()
@@ -162,19 +163,13 @@ class Sidebar(Frame):
             separator1 = ttk.Separator(content_frame, orient="horizontal")
             separator1.pack(fill="x", pady=10)
 
-            tab.draft_selection_var = ttk.BooleanVar(value=False)
+            tab.draft_selection_var = self.global_draft_mode
             draft_check = Checkbutton(
                 content_frame,
                 text="Draft Mode",
                 variable=tab.draft_selection_var,
                 command=lambda tab=tab, axis=self.tabs.index(tab): (
-                    self.view._update_slice(
-                        self.view._get_canvas(axis).figure.axes[0],
-                        self.view._get_canvas(axis),
-                        axis,
-                        int(self.view._get_canvas(axis).slider.get()),
-                        "Axial View" if axis == 0 else "Coronal View" if axis == 1 else "Sagittal View"
-                    ),
+                    self.view.update_all_views(),
                     self.view.update_mesh_view("AXIAL" if axis == 0 else "CORONAL" if axis == 1 else "SAGITTAL")
                 )
             )

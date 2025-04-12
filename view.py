@@ -330,7 +330,7 @@ class MainView(Window):
 
         # show masks
         if canvas.show_mask_var.get():
-            if current_tab.draft_selection_var.get():
+            if self.sidebar.global_draft_mode.get():
                 mask = self._get_mask(axis, is_draft=True)
             else:
                 mask = self._get_mask(axis)
@@ -340,7 +340,7 @@ class MainView(Window):
 
         # show points    
         if canvas.show_points_var.get():
-            if current_tab.draft_selection_var.get():
+            if self.sidebar.global_draft_mode.get():
                 for point in current_tab.draft_points:
                     x, y, color, _ = point
                     self.plot_point(x, y, color, ax)
@@ -432,7 +432,7 @@ class MainView(Window):
             points = {}
             for i, tab in enumerate(self.sidebar.tabs):
                 # use draft points if draft selection is enabled in tab
-                used_points = tab.draft_points if tab.draft_selection_var.get() else tab.points
+                used_points = tab.draft_points if self.sidebar.global_draft_mode.get() else tab.points
                 for point in used_points:
                     x, y, color, pos_flag = point
                     obj_id = self.color_obj_id_mapping.get(color, 1)
@@ -486,7 +486,7 @@ class MainView(Window):
                 return
             
             # use draft points if draft selection is enabled in tab
-            if current_tab.draft_selection_var.get():
+            if self.sidebar.global_draft_mode.get():
                 used_points = current_tab.draft_points
             else:
                 used_points = current_tab.points
@@ -541,11 +541,12 @@ class MainView(Window):
         active_index = self.sidebar.tabControl.index("current")
         current_tab = self.sidebar.tabs[active_index]
 
-        if axis_str_suffix == "AXIAL":
+        # if global segmentation is enabled, update the axial view
+        if axis_str_suffix == "AXIAL" or self.sidebar.global_segmentation_var.get():
             axis = self.axial_view
             label = "Axial View"
             axis_num = 0
-            if current_tab.draft_selection_var.get():
+            if self.sidebar.global_draft_mode.get():
                 self.draft_axial_view_mask = segmentation_mask
             else:
                 self.axial_view_mask = segmentation_mask
@@ -553,7 +554,7 @@ class MainView(Window):
             axis = self.coronal_view
             label = "Coronal View"
             axis_num = 1
-            if current_tab.draft_selection_var.get():
+            if self.sidebar.global_draft_mode.get():
                 self.draft_coronal_view_mask = segmentation_mask
             else:
                 self.coronal_view_mask = segmentation_mask
@@ -561,18 +562,13 @@ class MainView(Window):
             axis = self.sagittal_view
             label = "Sagittal View"
             axis_num = 2
-            if current_tab.draft_selection_var.get():
+            if self.sidebar.global_draft_mode.get():
                 self.draft_sagittal_view_mask = segmentation_mask
             else:
                 self.sagittal_view_mask = segmentation_mask
         else:
             raise ValueError("Invalid axis string.")
             return
-        
-        if current_tab.draft_selection_var.get():
-            self.last_draft_result = segmentation_mask
-        else:
-            self.last_result = segmentation_mask
 
         canvas = axis.canvas
         canvas.show_mask_checkbox.config(state="normal")
@@ -766,42 +762,92 @@ class MainView(Window):
     
     def update_mesh_view(self, axis_str_suffix: str) -> None:
         """
-        Update mesh view with the segmentation result and update the label to
-        reflect the view used for segmentation.
+        Update the 3D mesh view by aggregating segmentation masks from all views
+        that share the same global draft state. If draft mode is checked, uses draft masks;
+        otherwise uses the non-draft masks. If no masks exist for the current mode, an empty
+        3D mesh view is shown.
 
         Parameters:
-            video_segments (dict): A dictionary of segmentation data for each frame.
-                Each key represents a frame index and its value is a dictionary mapping object IDs to masks.
             axis_str_suffix (str): A string indicating the segmentation view orientation
                 (e.g., "AXIAL", "CORONAL", or "SAGITTAL").
         """
-        current_tab = self.sidebar.tabs[self.sidebar.tabControl.index("current")]
-        is_draft = current_tab.draft_selection_var.get()
-        if is_draft:
-            if self.last_draft_result:
-                video_segments = self.last_draft_result
+        is_draft = self.sidebar.global_draft_mode.get()
+
+        original_np = np.asarray(self.model.image)
+        A, C, S = original_np.shape
+
+        # collect all object ids from all mask sources across the views
+        all_object_ids = set()
+        for axis in [0,1,2]:
+            if axis == 0:
+                mask_source = self.draft_axial_view_mask if is_draft else self.axial_view_mask
+            elif axis == 1:
+                mask_source = self.draft_coronal_view_mask if is_draft else self.coronal_view_mask
+            elif axis == 2:
+                mask_source = self.draft_sagittal_view_mask if is_draft else self.sagittal_view_mask
             else:
-                return
-        else:
-            if self.last_result:
-                video_segments = self.last_result
-            else:
-                return
+                mask_source = None
 
-        # Step 1: Convert segmented frames into a 3D volume
-        z_dim = len(video_segments) # Number of frames
-        first_frame_object_ids = list(video_segments[0].keys())
+            if mask_source:
+                for slice_idx, obj_masks in mask_source.items():
+                    all_object_ids.update(obj_masks.keys())
+        
+        # if no meshes available for the current mode, show empty
+        if not all_object_ids:
+            fig = self.mesh_view.canvas.figure
+            fig.clf()  # Clear current figure
+            ax = fig.add_subplot(111, projection='3d')
+            ax.set_title(f"{'[Draft]' if is_draft else ''} Segmentation Results (3D Mesh View)")
+            if hasattr(self.mesh_view, "label"):
+                new_text = f'{"Draft" if is_draft else ""} {axis_str_suffix.title()} Segmentation Results (3D Mesh View)'
+                self.mesh_view.label.config(text=new_text)
+            self.mesh_view.canvas.draw()
+            return
+        
+        # initialise combined meshes as an axial volume (A, C, S) for each object
+        combined_meshes = {obj_id: np.zeros((A, C, S), dtype=int) for obj_id in all_object_ids}
 
-        shape = video_segments[0][first_frame_object_ids[0]].shape # Shape of the mask
-        x_dim = shape[1]
-        y_dim = shape[2]
-        combined_meshes = {obj_id : np.zeros((z_dim, x_dim, y_dim), dtype=int) for obj_id in first_frame_object_ids}
-
-        # Populate the 3D array with the segmentation masks and image data
-        for z, frame_data in video_segments.items():
-            # inner loop necessary to support multiple objects (segmentation masks) in a single frame
-            for obj_id, mask in frame_data.items():
-                combined_meshes[obj_id][z, :, :] = np.squeeze(mask)  # Assign '1' to masked regions
+        # process each view and aggregate the masks
+        for axis in [0,1,2]:
+            if axis == 0:
+                # Axial view – masks should be in axial space: each slice is (C, S), keyed by axial index.
+                mask_source = self.draft_axial_view_mask if is_draft else self.axial_view_mask
+                if not mask_source:
+                    continue
+                for z, frame_data in mask_source.items():
+                    # z is axial slice index in range [0, A-1]
+                    for obj_id, mask in frame_data.items():
+                        m = np.squeeze(mask) # get expected shape (C, S)
+                        if m.shape != (C, S):
+                            continue
+                        combined_meshes[obj_id][z, :, :] = np.maximum(combined_meshes[obj_id][z, :, :], m)  # combine masks
+            elif axis == 1:
+                # Coronal view – masks are of shape (A, S) keyed by a coronal index j (0 <= j < C).
+                mask_source = self.draft_coronal_view_mask if is_draft else self.coronal_view_mask
+                if not mask_source:
+                    continue
+                for j, frame_data in mask_source.items():
+                    # j is row coordinate in axial view
+                    for obj_id, mask in frame_data.items():
+                        m = np.squeeze(mask) # get expected shape (A, S)
+                        if m.shape != (A, S):
+                            continue
+                        for a in range(A):
+                            combined_meshes[obj_id][a, j, :] = np.maximum(combined_meshes[obj_id][a, j, :], m[a, :])
+            elif axis == 2:
+                # Sagittal view – masks are of shape (A, C) keyed by a sagittal index k (0 <= k < S).
+                mask_source = self.draft_sagittal_view_mask if is_draft else self.sagittal_view_mask
+                if not mask_source:
+                    continue
+                for k, frame_data in mask_source.items():
+                    # k is column coordinate in axial view
+                    for obj_id, mask in frame_data.items():
+                        m = np.squeeze(mask) # get expected shape (A, C)
+                        if m.shape != (A, C):
+                            continue
+                        for a in range(A):
+                            # remap pixel (a, c) in sagittal view to (a, c, k)
+                            combined_meshes[obj_id][a, :, k] = np.maximum(combined_meshes[obj_id][a, :, k], m[a, :])
 
         # store current mesh data for export
         self.current_mesh_data = []
@@ -838,13 +884,21 @@ class MainView(Window):
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
-        ax.set_title('3D Mesh View')  
+        ax.set_title('3D Mesh View')
 
         self.mesh_view.canvas.draw()
 
+        if is_draft:
+            # store the mesh for each object in a dictionary
+            self.last_draft_result = {obj_id: (verts, faces) 
+                                    for verts, faces, obj_id in self.current_mesh_data}
+        else:
+            self.last_result = {obj_id: (verts, faces) 
+                                for verts, faces, obj_id in self.current_mesh_data}
+
         # update the mesh view label
         if hasattr(self.mesh_view, "label"):
-            new_text = f"{"Draft" if is_draft else ""} {axis_str_suffix.title()} Segmentation Result (3D Mesh View)"
+            new_text = f'{"Draft" if is_draft else ""} {axis_str_suffix.title()} Segmentation Result (3D Mesh View)'
             self.mesh_view.label.config(text=new_text)
     
     def _export_3d_mesh(self) -> None:
@@ -860,12 +914,21 @@ class MainView(Window):
             return
     
         # ensure segmentation has been run, else, 3d segmentation mesh will not exist
-        if not hasattr(self, "current_mesh_data"):
-            tk.messagebox.showerror("Error", "No segmentation available to export.")
-            return
+        if self.sidebar.global_draft_mode.get():
+            if not self.last_draft_result:
+                tk.messagebox.showerror("Export Error", "No segmentation result available for export.")
+                return
+            else:
+                video_segments = self.last_draft_result
+        else:
+            if not self.last_result:
+                tk.messagebox.showerror("Export Error", "No segmentation result available for export.")
+                return
+            else:
+                video_segments = self.last_result
         
         stl_meshes = []
-        for verts, faces, obj_id in self.current_mesh_data:
+        for obj_id, (verts, faces) in video_segments.items():
             triangles = verts[faces] # shape: (n_faces, 3, 3)
             m = mesh.Mesh(np.zeros(triangles.shape[0], dtype=mesh.Mesh.dtype))
             for i, triangle in enumerate(triangles):
@@ -937,7 +1000,7 @@ class MainView(Window):
 
         num_slices = original_np.shape[axis]
 
-        if current_tab.draft_selection_var.get():
+        if self.sidebar.global_draft_mode.get():
             mask_dict = self._get_mask(axis, is_draft=True)
         else:
             mask_dict = self._get_mask(axis)
@@ -1102,12 +1165,25 @@ class MainView(Window):
         ax.set_title("3D Mesh View")
         self.mesh_view.canvas.draw()
     
-    def update_global_segmentation_state(self):
+    def update_global_segmentation_state(self) -> None:
         # Enable if any tab contains at least one point; else disable.
         enable = any(tab.points for tab in self.sidebar.tabs)
         state = "normal" if enable else "disabled"
         for tab in self.sidebar.tabs:
             tab.global_segmentation_checkbox.config(state=state)
+
+    def update_all_views(self) -> None:
+        """
+        Loop through all image views (axial, coronal, sagittal)
+        and update their displayed slices.
+        """
+        # mapping of axis to view name
+        view_names = {0: "Axial View", 1: "Coronal View", 2: "Sagittal View"}
+        for axis in [0, 1, 2]:
+            canvas = self._get_canvas(axis)
+            label = view_names.get(axis, "View")
+            slice_idx = int(canvas.slider.get())  # use the current slider value in each view
+            self._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
 
     def _on_close(self) -> None:
         """
