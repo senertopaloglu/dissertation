@@ -161,7 +161,7 @@ class SegmentationController:
             label = "Sagittal View"
             axis = 2
         slice_idx = int(canvas.slider.get())
-        self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
+        self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx)
 
     def redo(self, is_draft: bool) -> None:
         """
@@ -206,7 +206,7 @@ class SegmentationController:
             axis = 2
         
         slice_idx = int(canvas.slider.get())
-        self.view._update_slice(ax, canvas, axis, slice_idx, label)
+        self.view._update_slice(ax, canvas, axis, slice_idx)
     
     def refresh_selection_state(self) -> None:
         # Iterate over all tabs and reset their state.
@@ -356,7 +356,7 @@ class SegmentationController:
                 completion_callback(video_segments)
             else:
                 self.view.show_segmentation(video_segments, axis_str_suffix)
-                self.view.update_mesh_view(axis_str_suffix)
+                self.view.update_mesh_view()
         
         seg_thread = threading.Thread(target=run_segmentation)
         seg_thread.start()
@@ -485,7 +485,7 @@ class SegmentationController:
                     nonlocal most_recent_video_segments
                     if most_recent_video_segments:
                         self.view.show_segmentation(most_recent_video_segments, axis_str_suffix)
-                        self.view.update_mesh_view(axis_str_suffix)
+                        self.view.update_mesh_view()
                 self.view.after(100, show_final)
                 return
             
@@ -645,14 +645,15 @@ class SegmentationController:
         upsampled_masks = {}
         iteration(current_res, seeds)
 
-    def merge_drafts(self) -> None:
+    def merge_drafts(self, active_index: int = None) -> None:
         """
         Merges draft points into regular points for the current active tab.
         If a draft point has the same color as an existing final point,
         it overwrites that final point. Afterwards, resets draft points,
         listbox, undo/redo stacks and draft line objects.
         """
-        active_index = self.view.sidebar.tabControl.index("current")
+        if active_index is None:
+            active_index = self.view.sidebar.tabControl.index("current")
         current_tab = self.view.sidebar.tabs[active_index]
 
         from collections import defaultdict
@@ -748,6 +749,14 @@ class SegmentationController:
         canvas = self.view._get_canvas(active_index)
         label = "Axial View" if active_index == 0 else "Coronal View" if active_index == 1 else "Sagittal View"
         slice_idx = int(canvas.slider.get())
-        self.view._update_slice(canvas.figure.axes[0], canvas, active_index, slice_idx, label)
-        self.view.update_mesh_view(label)
+        self.view._update_slice(canvas.figure.axes[0], canvas, active_index, slice_idx)
+        self.view.update_mesh_view()
         self.view.update_all_views()
+    
+    def merge_all_drafts(self) -> None:
+        """
+        Calls merge_drafts on every view to merge all draft points, masks and meshes.
+        """
+        # Merge draft points from all tabs into regular points
+        for idx in [0,1,2]:
+            self.merge_drafts(idx)

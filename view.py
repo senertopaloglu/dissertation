@@ -80,7 +80,7 @@ class MainView(Window):
         self.state("zoomed")
 
         # Prepare main window layout
-        self.columnconfigure(0, weight=1, minsize=280)  # Left sidebar
+        self.columnconfigure(0, weight=2, minsize=300)  # Left sidebar
         self.columnconfigure(1, weight=3)
         self.columnconfigure(2, weight=3)
         self.rowconfigure(0, weight=3)
@@ -168,6 +168,7 @@ class MainView(Window):
         label = Label(content_frame, text=text, font=("TkDefaultFont", 13))
         label.pack(side="top", fill="x", expand=True, pady=(5,0))
         label.configure(anchor="center", justify="center")
+        outer_frame.label = label
 
         control_frame = Frame(content_frame)
         control_frame.pack(side="top", fill="x", pady=5)
@@ -212,7 +213,7 @@ class MainView(Window):
                 from_=0, 
                 to=max_slice, 
                 orient="horizontal",
-                command=lambda val: self._update_slice(ax, canvas, axis, val, text)
+                command=lambda val: self._update_slice(ax, canvas, axis, val)
             )
             slider.pack(side="top", fill="x", expand=True)
             
@@ -224,7 +225,7 @@ class MainView(Window):
                 control_frame,
                 text="Show Segmentation Masks",
                 variable=show_mask_var,
-                command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
+                command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get())) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
             )
             show_mask_checkbox.pack(side="top", anchor="center", pady=5)
 
@@ -239,7 +240,7 @@ class MainView(Window):
                 control_frame,
                 text="Show Points",
                 variable=show_points_var,
-                command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()), text)
+                command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()))
             )
             show_points_checkbox.pack(side="top", anchor="center", pady=(3,2))
             # initially disable the checkbox because there are no points to show yet
@@ -247,7 +248,7 @@ class MainView(Window):
             canvas.show_points_checkbox = show_points_checkbox
             
             # initialize the slice display
-            self._update_slice(ax, canvas, axis, initial_slice, text)
+            self._update_slice(ax, canvas, axis, initial_slice)
 
             canvas.slider = slider
 
@@ -288,7 +289,7 @@ class MainView(Window):
         return outer_frame
 
 
-    def _update_slice(self, ax: Axes, canvas: FigureCanvasTkAgg, axis: int, val: Union[int, str], text: str) -> None:
+    def _update_slice(self, ax: Axes, canvas: FigureCanvasTkAgg, axis: int, val: Union[int, str]) -> None:
         """
         Update the displayed slice in the given axis whenever the slider changes.
 
@@ -297,7 +298,6 @@ class MainView(Window):
             canvas (FigureCanvasTkAgg): The canvas containing the Matplotlib figure.
             axis (int): The image axis (0 for axial, 1 for coronal, 2 for sagittal).
             val (int or str): The slider value representing the current slice index.
-            text (str): The label indicating the view (e.g., "Axial View").
 
         Returns:
             None
@@ -315,7 +315,7 @@ class MainView(Window):
         slice_array = self._slice_request_callback(axis, slice_index)
         ax.clear()
         ax.imshow(slice_array, cmap='gray')
-        ax.set_title(f"{text} - Slice {slice_index}")
+        ax.set_title(f"Slice {slice_index}")
 
         # restore zoom limits
         if getattr(self, "_preserve_zoom", True):
@@ -574,7 +574,7 @@ class MainView(Window):
         canvas.show_mask_checkbox.config(state="normal")
         canvas.show_mask_var.set(True)
         slice_idx = int(canvas.slider.get())
-        self._update_slice(canvas.figure.axes[0], canvas, axis_num, slice_idx, label)   
+        self._update_slice(canvas.figure.axes[0], canvas, axis_num, slice_idx)   
 
     def set_on_click_callback(self, callback: Callable[[Any, str, Any], None]) -> None:
         """Sets the callback invoked on mouse click in the figure."""
@@ -744,23 +744,23 @@ class MainView(Window):
             try:
                 slider_val = int(self.axial_view.canvas.slider.get())
                 self._update_slice(self.axial_view.canvas.figure.axes[0],
-                                   self.axial_view.canvas, 0, slider_val, "Axial View")
+                                   self.axial_view.canvas, 0, slider_val)
             except Exception as e:
                 print("Error resetting axial view:", e)
             try:
                 slider_val = int(self.coronal_view.canvas.slider.get())
                 self._update_slice(self.coronal_view.canvas.figure.axes[0],
-                                   self.coronal_view.canvas, 1, slider_val, "Coronal View")
+                                   self.coronal_view.canvas, 1, slider_val)
             except Exception as e:
                 print("Error resetting coronal view:", e)
             try:
                 slider_val = int(self.sagittal_view.canvas.slider.get())
                 self._update_slice(self.sagittal_view.canvas.figure.axes[0],
-                                   self.sagittal_view.canvas, 2, slider_val, "Sagittal View")
+                                   self.sagittal_view.canvas, 2, slider_val)
             except Exception as e:
                 print("Error resetting sagittal view:", e)
     
-    def update_mesh_view(self, axis_str_suffix: str) -> None:
+    def update_mesh_view(self) -> None:
         """
         Update the 3D mesh view by aggregating segmentation masks from all views
         that share the same global draft state. If draft mode is checked, uses draft masks;
@@ -797,9 +797,8 @@ class MainView(Window):
             fig = self.mesh_view.canvas.figure
             fig.clf()  # Clear current figure
             ax = fig.add_subplot(111, projection='3d')
-            ax.set_title(f"{'[Draft]' if is_draft else ''} Segmentation Results (3D Mesh View)")
             if hasattr(self.mesh_view, "label"):
-                new_text = f'{"Draft" if is_draft else ""} {axis_str_suffix.title()} Segmentation Results (3D Mesh View)'
+                new_text = f'{"[Draft]" if is_draft else ""} Segmentation Results (3D Mesh View)'
                 self.mesh_view.label.config(text=new_text)
             self.mesh_view.canvas.draw()
             return
@@ -884,7 +883,6 @@ class MainView(Window):
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
-        ax.set_title('3D Mesh View')
 
         self.mesh_view.canvas.draw()
 
@@ -898,7 +896,7 @@ class MainView(Window):
 
         # update the mesh view label
         if hasattr(self.mesh_view, "label"):
-            new_text = f'{"Draft" if is_draft else ""} {axis_str_suffix.title()} Segmentation Result (3D Mesh View)'
+            new_text = f'{"[Draft]" if is_draft else ""} Segmentation Result (3D Mesh View)'
             self.mesh_view.label.config(text=new_text)
     
     def _export_3d_mesh(self) -> None:
@@ -1162,7 +1160,6 @@ class MainView(Window):
         # Re-create an empty 3D axes with a title.
         ax = fig.add_subplot(111, projection='3d')
         self.mesh_view.label.configure(text="Segmentation Result (3D Mesh View)")
-        ax.set_title("3D Mesh View")
         self.mesh_view.canvas.draw()
     
     def update_global_segmentation_state(self) -> None:
@@ -1177,13 +1174,34 @@ class MainView(Window):
         Loop through all image views (axial, coronal, sagittal)
         and update their displayed slices.
         """
-        # mapping of axis to view name
-        view_names = {0: "Axial View", 1: "Coronal View", 2: "Sagittal View"}
+        self.update_view_labels()
+        
         for axis in [0, 1, 2]:
             canvas = self._get_canvas(axis)
-            label = view_names.get(axis, "View")
             slice_idx = int(canvas.slider.get())  # use the current slider value in each view
-            self._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
+            self._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx)
+        
+
+    def update_view_labels(self) -> None:
+        """
+        Update the labels for the Axial, Coronal, and Sagittal frames.
+        If global draft mode is enabled, prepend "[DRAFT]" to each label.
+        """
+        prefix = "[DRAFT] " if self.sidebar.global_draft_mode.get() else ""
+        self.axial_view.label.config(text=f"{prefix}Axial View")
+        self.coronal_view.label.config(text=f"{prefix}Coronal View")
+        self.sagittal_view.label.config(text=f"{prefix}Sagittal View")
+        self.mesh_view.label.config(text=f"{prefix}Segmentation Result (3D Mesh View)")
+
+    def update_tabs(self) -> None:
+        """
+        Select the correct tab (Draft or Selected Points) in the view tabs.
+        """
+        for tab in self.sidebar.tabs:
+            if self.sidebar.global_draft_mode.get():
+                tab.points_notebook.select(tab.draft_frame)
+            else:
+                tab.points_notebook.select(tab.selected_frame)
 
     def _on_close(self) -> None:
         """
