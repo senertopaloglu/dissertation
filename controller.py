@@ -100,13 +100,19 @@ class SegmentationController:
         if current_tab.pos_click_checkbox["state"] == "disabled":
             current_tab.pos_click_checkbox["state"] = "normal"
         
-        # Add to points list
-        current_tab.points.append((x, y, color, pos_flag))
-        # Clear the redo stack if a new point is added
-        current_tab.redo_stack.clear()
+        if current_tab.draft_selection_var.get():
+            # If in draft mode, do not add the point to the points list.
+            current_tab.draft_points.append((x, y, color, pos_flag))
+            current_tab.draft_redo_stack.clear()
+            self.view.add_point_to_listbox(x, y, pos_flag, True, active_index=active_index, color=color)
+        else:
+            # Add to points list
+            current_tab.points.append((x, y, color, pos_flag))
+            # Clear the redo stack if a new point is added
+            current_tab.redo_stack.clear()
+            self.view.add_point_to_listbox(x, y, pos_flag, False, active_index=active_index)
 
         # Update the View
-        self.view.add_point_to_listbox(x, y, pos_flag, active_index=active_index)
         line = self.view.plot_point(x, y, color, ax)
         current_tab.line_objects.append(line)
 
@@ -118,26 +124,29 @@ class SegmentationController:
             current_tab.pos_click_var.set(True)
             current_tab.pos_click_checkbox.config(state="disabled")
 
-    def undo(self) -> None:
+    def undo(self, is_draft: bool) -> None:
         """
         Undo the last point addition.
         """
         active_index = self.view.sidebar.tabControl.index("current")
         current_tab = self.view.sidebar.tabs[active_index]
 
-        if not current_tab.points:
-            return
-
-        # Pop the last point from points
-        last_point = current_tab.points.pop()
-        current_tab.undo_stack.append(last_point)
-        current_tab.redo_stack.append(last_point)
-
-        # Remove from the View’s listbox and figure
-        self.view.remove_last_point_from_listbox()
-        if current_tab.line_objects:
-            last_line = current_tab.line_objects.pop()
-            last_line.remove()
+        if is_draft:
+            if current_tab.draft_points and current_tab.draft_points_listbox.size() > 0:
+                removed_point = current_tab.draft_points.pop()
+                current_tab.draft_redo_stack.append(removed_point)
+                self.view.remove_last_point_from_listbox(is_draft)
+                if current_tab.draft_line_objects:
+                    line = current_tab.draft_line_objects.pop()
+                    line.remove()
+        else:
+            if current_tab.points and current_tab.points_listbox.size() > 0:
+                removed_point = current_tab.points.pop()
+                current_tab.redo_stack.append(removed_point)
+                self.view.remove_last_point_from_listbox(is_draft)
+                if current_tab.line_objects:
+                    line = current_tab.line_objects.pop()
+                    line.remove()
 
         if active_index == 0:
             canvas = self.view.axial_view.canvas
@@ -154,22 +163,34 @@ class SegmentationController:
         slice_idx = int(canvas.slider.get())
         self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
 
-    def redo(self) -> None:
+    def redo(self, is_draft: bool) -> None:
         """
         Redo the last undone point addition.
         """
         active_index = self.view.sidebar.tabControl.index("current")
         current_tab = self.view.sidebar.tabs[active_index]
 
-        if not current_tab.redo_stack:
-            return
+        canvas = self.view._get_canvas(active_index)
+        ax = canvas.figure.axes[0]
 
-        restored_point = current_tab.redo_stack.pop()
-        current_tab.points.append(restored_point)
-        current_tab.undo_stack.append(restored_point)
-
-        x, y, color, pos_flag = restored_point
-        self.view.add_point_to_listbox(x, y, pos_flag, color=color)
+        if is_draft:
+            if current_tab.draft_redo_stack:
+                restored_point = current_tab.draft_redo_stack.pop()
+                current_tab.draft_points.append(restored_point)
+                current_tab.draft_undo_stack.append(restored_point)
+                x, y, color, pos_flag = restored_point
+                self.view.add_point_to_listbox(x, y, pos_flag, True, active_index=active_index, color=color)
+                line = self.view.plot_point(x, y, color, ax)
+                current_tab.draft_line_objects.append(line)
+        else:
+            if current_tab.redo_stack:
+                restored_point = current_tab.redo_stack.pop()
+                current_tab.points.append(restored_point)
+                current_tab.undo_stack.append(restored_point)
+                x, y, color, pos_flag = restored_point
+                self.view.add_point_to_listbox(x, y, pos_flag, False, active_index=active_index, color=color)
+                line = self.view.plot_point(x, y, color, ax)
+                current_tab.line_objects.append(line)
 
         if active_index == 0:
             canvas = self.view.axial_view.canvas
@@ -184,16 +205,26 @@ class SegmentationController:
             label = "Sagittal View"
             axis = 2
         
-        self.view.plot_point(x, y, color, getattr(self.view, f"{label.lower().split()[0]}_view").canvas_ax)
         slice_idx = int(canvas.slider.get())
-        self.view._update_slice(canvas.figure.axes[0], canvas, axis, slice_idx, label)
+        self.view._update_slice(ax, canvas, axis, slice_idx, label)
     
     def refresh_selection_state(self) -> None:
         # Iterate over all tabs and reset their state.
         for tab in self.view.sidebar.tabs:
-            # Clear the Listbox (if it exists)
+            # Clear the draft listbox (if it exists)
+            if tab.draft_points_listbox:
+                tab.draft_points_listbox.delete(0, "end")
+            # Clear the listbox (if it exists)
             if tab.points_listbox:
                 tab.points_listbox.delete(0, "end")
+            
+            # Remove any drawn draft line objects from the canvas.
+            while tab.draft_line_objects:
+                line = tab.draft_line_objects.pop()
+                try:
+                    line.remove()
+                except Exception as e:
+                    print(f"Error removing line: {e}")
             # Remove any drawn line objects from the canvas.
             while tab.line_objects:
                 line = tab.line_objects.pop()
@@ -201,9 +232,13 @@ class SegmentationController:
                     line.remove()
                 except Exception as e:
                     print(f"Error removing line: {e}")
+
             # Reset the lists and stacks.
+            tab.draft_points = []
             tab.points = []
+            tab.draft_undo_stack = []
             tab.undo_stack = []
+            tab.draft_redo_stack = []
             tab.redo_stack = []
             if hasattr(tab, "pos_click_checkbox"):
                 tab.pos_click_checkbox.config(state = "disabled")
@@ -321,7 +356,7 @@ class SegmentationController:
                 completion_callback(video_segments)
             else:
                 self.view.show_segmentation(video_segments, axis_str_suffix)
-                self.view.update_mesh_view(video_segments, axis_str_suffix)
+                self.view.update_mesh_view(axis_str_suffix)
         
         seg_thread = threading.Thread(target=run_segmentation)
         seg_thread.start()
@@ -450,7 +485,7 @@ class SegmentationController:
                     nonlocal most_recent_video_segments
                     if most_recent_video_segments:
                         self.view.show_segmentation(most_recent_video_segments, axis_str_suffix)
-                        self.view.update_mesh_view(most_recent_video_segments, axis_str_suffix)
+                        self.view.update_mesh_view(axis_str_suffix)
                 self.view.after(100, show_final)
                 return
             
@@ -609,3 +644,112 @@ class SegmentationController:
         # initialise variable to hold upsampled masks from last iteration
         upsampled_masks = {}
         iteration(current_res, seeds)
+
+    def merge_drafts(self) -> None:
+        """
+        Merges draft points into regular points for the current active tab.
+        If a draft point has the same color as an existing final point,
+        it overwrites that final point. Afterwards, resets draft points,
+        listbox, undo/redo stacks and draft line objects.
+        """
+        active_index = self.view.sidebar.tabControl.index("current")
+        current_tab = self.view.sidebar.tabs[active_index]
+
+        from collections import defaultdict
+
+        final_points_dict = defaultdict(list)
+        for pt in current_tab.points:
+            final_points_dict[pt[2].lower()].append(pt)
+        
+        draft_points_dict = defaultdict(list)
+        for pt in current_tab.draft_points:
+            draft_points_dict[pt[2].lower()].append(pt)
+
+        merged_points = []
+        colors = set(final_points_dict.keys()).union(set(draft_points_dict.keys()))
+        for color in colors:
+            # If any draft points were recorded for this color, use them to overwrite
+            if draft_points_dict[color]:
+                merged_points.extend(draft_points_dict[color])
+            else:
+                merged_points.extend(final_points_dict[color])
+        current_tab.points = merged_points
+        
+        # Clear and repopulate the final points listbox.
+        if current_tab.points_listbox:
+            current_tab.points_listbox.delete(0, "end")
+            for pt in merged_points:
+                x, y, color, pos_flag = pt
+                prefix = "Positive click" if pos_flag else "Negative click"
+                current_tab.points_listbox.insert("end", f"{prefix} at ({x},{y})")
+                idx = current_tab.points_listbox.size() - 1
+                try:
+                    current_tab.points_listbox.itemconfig(idx, {'fg': color.lower()})
+                except Exception as e:
+                    print(f"Error setting color in listbox: {e}")
+        
+        # Reset all draft state: points, listbox, undo/redo stacks and drawn lines.
+        current_tab.draft_points = []
+        if current_tab.draft_points_listbox:
+            current_tab.draft_points_listbox.delete(0, "end")
+        current_tab.draft_undo_stack = []
+        current_tab.draft_redo_stack = []
+        while current_tab.draft_line_objects:
+            line = current_tab.draft_line_objects.pop()
+            current_tab.line_objects.append(line)
+            try:
+                line.remove()
+            except Exception as e:
+                print(f"Error removing draft line: {e}")
+        
+        # merge segmentation masks
+        if active_index == 0:
+            base_mask = self.view.axial_view_mask or {}
+            draft_mask = self.view.draft_axial_view_mask or {}
+        elif active_index == 1:
+            base_mask = self.view.coronal_view_mask or {}
+            draft_mask = self.view.draft_coronal_view_mask or {}
+        elif active_index == 2:
+            base_mask = self.view.sagittal_view_mask or {}
+            draft_mask = self.view.draft_sagittal_view_mask or {}
+        else:
+            base_mask = {}
+            draft_mask = {}
+        
+        # for every slice in the draft mask, update (or add) each object mask.
+        for slice_idx, obj_masks in draft_mask.items():
+            if slice_idx not in base_mask:
+                base_mask[slice_idx] = obj_masks.copy()
+            else:
+                base_mask[slice_idx].update(obj_masks)
+        
+        # store the merged masks back and reinitialise the draft masks.
+        if active_index == 0:
+            self.view.axial_view_mask = base_mask
+            self.view.draft_axial_view_mask = {}
+        elif active_index == 1:
+            self.view.coronal_view_mask = base_mask
+            self.view.draft_coronal_view_mask = {}
+        elif active_index == 2:
+            self.view.sagittal_view_mask = base_mask
+            self.view.draft_sagittal_view_mask = {}
+        
+        # merge 3d mesh results
+        base_mesh = self.view.last_result or {}
+        draft_mesh = self.view.last_draft_result or {}
+        for slice_idx, obj_masks in draft_mesh.items():
+            if slice_idx not in base_mesh:
+                base_mesh[slice_idx] = obj_masks.copy()
+            else:
+                base_mesh[slice_idx].update(obj_masks)
+        self.view.last_result = base_mesh
+        self.view.last_draft_result = None
+
+        current_tab.draft_selection_var.set(False)
+
+        # Update the current view slice to reflect merged points.
+        canvas = self.view._get_canvas(active_index)
+        label = "Axial View" if active_index == 0 else "Coronal View" if active_index == 1 else "Sagittal View"
+        slice_idx = int(canvas.slider.get())
+        self.view._update_slice(canvas.figure.axes[0], canvas, active_index, slice_idx, label)
+        self.view.update_mesh_view(label)

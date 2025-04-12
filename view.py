@@ -73,6 +73,9 @@ class MainView(Window):
         self.last_used_axis = None
         self.last_used_slice_index = None
 
+        self.last_result = None
+        self.last_draft_result = None
+
         self.title("Interactive 3D Medical Image Segmentation")
         self.state("zoomed")
 
@@ -98,9 +101,14 @@ class MainView(Window):
         (placeholder) mesh view.
         """
         self.sidebar.controller = self.controller
+
         self.axial_view_mask = None
         self.coronal_view_mask = None
         self.sagittal_view_mask = None
+
+        self.draft_axial_view_mask = None
+        self.draft_coronal_view_mask = None
+        self.draft_sagittal_view_mask = None
         
         self.axial_view = self._create_image_frame("Axial View", axis=0)
         self.coronal_view = self._create_image_frame("Coronal View", axis=1)
@@ -318,16 +326,28 @@ class MainView(Window):
             ax.autoscale()
             self._preserve_zoom = True
 
+        current_tab = self.sidebar.tabs[axis]
+
+        # show masks
         if canvas.show_mask_var.get():
-            mask = self._get_mask(axis)
-            for out_obj_id, out_mask in mask[slice_index].items():
-                self.show_mask(out_mask, ax, obj_id=out_obj_id)
-        
+            if current_tab.draft_selection_var.get():
+                mask = self._get_mask(axis, is_draft=True)
+            else:
+                mask = self._get_mask(axis)
+            if mask and slice_index in mask:
+                for out_obj_id, out_mask in mask[slice_index].items():
+                    self.show_mask(out_mask, ax, obj_id=out_obj_id)
+
+        # show points    
         if canvas.show_points_var.get():
-            current_tab = self.sidebar.tabs[axis]
-            for point in current_tab.points:
-                x, y, color, _ = point
-                self.plot_point(x, y, color, ax)
+            if current_tab.draft_selection_var.get():
+                for point in current_tab.draft_points:
+                    x, y, color, _ = point
+                    self.plot_point(x, y, color, ax)
+            else:
+                for point in current_tab.points:
+                    x, y, color, _ = point
+                    self.plot_point(x, y, color, ax)
 
         canvas.draw()
         self.update_idletasks()
@@ -410,10 +430,10 @@ class MainView(Window):
         
         if self.sidebar.global_segmentation_var.get():
             points = {}
-            
             for i, tab in enumerate(self.sidebar.tabs):
-                for point in tab.points:
-                    print(point)
+                # use draft points if draft selection is enabled in tab
+                used_points = tab.draft_points if tab.draft_selection_var.get() else tab.points
+                for point in used_points:
                     x, y, color, pos_flag = point
                     obj_id = self.color_obj_id_mapping.get(color, 1)
                     if i == 0:
@@ -432,12 +452,25 @@ class MainView(Window):
                             points[obj_id] = defaultdict(list)
                         points[obj_id][int(y)].append((curr_slice, int(x), int(pos_flag)))  
              
-            print(points)
-            print("*" * 100)
+            if not points:
+                tk.messagebox.showerror(
+                    "Input Error",
+                    f"No points selected for segmentation."
+                )
+                return
+            
             for k, v in points.items():
                 for a, b in v.items():
                     print(f"{k}|{a}|{b}")
-            self.controller.segment_image(self._slice_request_callback(0, 1), points, int(self.axial_view.canvas.slider.get()), "AXIAL", is_final=True, is_global=True)
+
+            self.controller.segment_image(
+                self._slice_request_callback(0, 1),
+                points,
+                int(self.axial_view.canvas.slider.get()),
+                "AXIAL",
+                is_final=True,
+                is_global=True
+            )
         else:
             active_index = self.sidebar.tabControl.index("current")
             current_tab = self.sidebar.tabs[active_index]
@@ -451,6 +484,19 @@ class MainView(Window):
             else:
                 raise ValueError("Invalid axis string.")
                 return
+            
+            # use draft points if draft selection is enabled in tab
+            if current_tab.draft_selection_var.get():
+                used_points = current_tab.draft_points
+            else:
+                used_points = current_tab.points
+            
+            if not used_points:
+                tk.messagebox.showerror(
+                    "Input Error",
+                    f"No points selected for segmentation."
+                )
+                return
 
             axis = active_index
             canvas = self._get_canvas(axis)
@@ -460,12 +506,19 @@ class MainView(Window):
             # object id -> (x, y, <flag for positive (1) or negative (0) click>)
             points = defaultdict(list)
 
-            for point in current_tab.points:
+            for point in used_points:
                 x, y, color, pos_flag = point
                 obj_id = self.color_obj_id_mapping.get(color.lower(), 1)
                 points[obj_id].append((x, y, pos_flag))
 
-            self.controller.segment_image(slice_array, points, frame_idx, axis_str_suffix, is_final=True, is_global=False)
+            self.controller.segment_image(
+                slice_array,
+                points,
+                frame_idx,
+                axis_str_suffix,
+                is_final=True,
+                is_global=False
+            )
     
     def show_image(self) -> None:
         """Re-initializes and displays all image frames for the current image.
@@ -485,31 +538,47 @@ class MainView(Window):
             segmentation_mask (dict): A dictionary containing segmentation masks keyed by slice index.
             axis_str_suffix (str): A string representing the image orientation (e.g., "AXIAL", "CORONAL", "SAGITTAL").
         """
+        active_index = self.sidebar.tabControl.index("current")
+        current_tab = self.sidebar.tabs[active_index]
+
         if axis_str_suffix == "AXIAL":
             axis = self.axial_view
             label = "Axial View"
             axis_num = 0
-            self.axial_view_mask = segmentation_mask
+            if current_tab.draft_selection_var.get():
+                self.draft_axial_view_mask = segmentation_mask
+            else:
+                self.axial_view_mask = segmentation_mask
         elif axis_str_suffix == "CORONAL":
             axis = self.coronal_view
             label = "Coronal View"
             axis_num = 1
-            self.coronal_view_mask = segmentation_mask
+            if current_tab.draft_selection_var.get():
+                self.draft_coronal_view_mask = segmentation_mask
+            else:
+                self.coronal_view_mask = segmentation_mask
         elif axis_str_suffix == "SAGITTAL":
             axis = self.sagittal_view
             label = "Sagittal View"
             axis_num = 2
-            self.sagittal_view_mask = segmentation_mask
+            if current_tab.draft_selection_var.get():
+                self.draft_sagittal_view_mask = segmentation_mask
+            else:
+                self.sagittal_view_mask = segmentation_mask
         else:
             raise ValueError("Invalid axis string.")
             return
+        
+        if current_tab.draft_selection_var.get():
+            self.last_draft_result = segmentation_mask
+        else:
+            self.last_result = segmentation_mask
 
         canvas = axis.canvas
         canvas.show_mask_checkbox.config(state="normal")
         canvas.show_mask_var.set(True)
         slice_idx = int(canvas.slider.get())
-
-        self._update_slice(canvas.figure.axes[0], canvas, axis_num, slice_idx, label)      
+        self._update_slice(canvas.figure.axes[0], canvas, axis_num, slice_idx, label)   
 
     def set_on_click_callback(self, callback: Callable[[Any, str, Any], None]) -> None:
         """Sets the callback invoked on mouse click in the figure."""
@@ -561,17 +630,17 @@ class MainView(Window):
         # Redraw after any changes
         canvas.draw()
 
-    def _on_undo_click(self) -> None:
+    def _on_undo_click(self, is_draft: bool) -> None:
         """Sets the callback invoked on undo button click."""
         if self._undo_callback:
-            self._undo_callback()
+            self._undo_callback(is_draft)
 
-    def _on_redo_click(self) -> None:
+    def _on_redo_click(self, is_draft: bool) -> None:
         """Sets the callback invoked on redo button click."""
         if self._redo_callback:
-            self._redo_callback()
+            self._redo_callback(is_draft)
 
-    def add_point_to_listbox(self, x: float, y: float, pos_flag: int, color: Optional[str] = None, active_index: Optional[int] = None) -> None:
+    def add_point_to_listbox(self, x: float, y: float, pos_flag: int, is_draft: bool, color: Optional[str] = None, active_index: Optional[int] = None) -> None:
         if active_index is None:
             active_index = self.sidebar.tabControl.index("current")
         current_tab = self.sidebar.tabs[active_index]
@@ -580,24 +649,37 @@ class MainView(Window):
             color = current_tab.pointer_color_var.get() or "Red"
         
         prefix = "Positive click" if pos_flag else "Negative click"
-        current_tab.points_listbox.insert("end", f"{prefix} at ({x},{y})")
-        idx = current_tab.points_listbox.size()-1
+        
+        if is_draft:
+            target_listbox = current_tab.draft_points_listbox
+        else:
+            target_listbox = current_tab.points_listbox
+
+        target_listbox.insert("end", f"{prefix} at ({x},{y})")
+        idx = target_listbox.size()-1
+        
         try:
-            current_tab.points_listbox.itemconfig(idx, {'fg': color.lower()})
+            target_listbox.itemconfig(idx, {'fg': color.lower()})
         except Exception as e:
             tk.messagebox.showerror("Item Color Error", f"Could not set item color: {e}")
-        current_tab.points_listbox.yview_moveto(1.0)
+        target_listbox.yview_moveto(1.0)
 
         canvas = self._get_canvas(active_index)
         canvas.show_points_checkbox.config(state="normal")
 
         self.update_global_segmentation_state()
 
-    def remove_last_point_from_listbox(self) -> None:
+    def remove_last_point_from_listbox(self, is_draft: bool) -> None:
         active_index = self.sidebar.tabControl.index("current")
         current_tab = self.sidebar.tabs[active_index]
-        if current_tab.points_listbox.size() > 0:
-            current_tab.points_listbox.delete("end")
+        
+        if is_draft:
+            points_listbox = current_tab.draft_points_listbox
+        else:
+            points_listbox = current_tab.points_listbox
+        
+        if points_listbox.size() > 0:
+            points_listbox.delete("end")
         else:
             canvas = self._get_canvas(active_index)
             canvas.show_points_checkbox.config(state="disabled")
@@ -682,7 +764,7 @@ class MainView(Window):
             except Exception as e:
                 print("Error resetting sagittal view:", e)
     
-    def update_mesh_view(self, video_segments: SegmentationResult, axis_str_suffix: str) -> None:
+    def update_mesh_view(self, axis_str_suffix: str) -> None:
         """
         Update mesh view with the segmentation result and update the label to
         reflect the view used for segmentation.
@@ -693,6 +775,19 @@ class MainView(Window):
             axis_str_suffix (str): A string indicating the segmentation view orientation
                 (e.g., "AXIAL", "CORONAL", or "SAGITTAL").
         """
+        current_tab = self.sidebar.tabs[self.sidebar.tabControl.index("current")]
+        is_draft = current_tab.draft_selection_var.get()
+        if is_draft:
+            if self.last_draft_result:
+                video_segments = self.last_draft_result
+            else:
+                return
+        else:
+            if self.last_result:
+                video_segments = self.last_result
+            else:
+                return
+
         # Step 1: Convert segmented frames into a 3D volume
         z_dim = len(video_segments) # Number of frames
         first_frame_object_ids = list(video_segments[0].keys())
@@ -708,7 +803,8 @@ class MainView(Window):
             for obj_id, mask in frame_data.items():
                 combined_meshes[obj_id][z, :, :] = np.squeeze(mask)  # Assign '1' to masked regions
 
-        # non_segmented_mesh = np.ones_like(combined_mesh) - combined_mesh
+        # store current mesh data for export
+        self.current_mesh_data = []
 
         # Create a 3D plot
         fig = self.mesh_view.canvas.figure
@@ -735,6 +831,8 @@ class MainView(Window):
 
             base_color = self.pointer_color_mapping.get(obj_id, "red")
             ax.plot_trisurf(verts[:, 0], verts[:, 1], faces, verts[:, 2], color=base_color, alpha=0.7)
+
+            self.current_mesh_data.append((verts, faces, obj_id))
         
         # Customize the plot (optional)
         ax.set_xlabel('X')
@@ -746,16 +844,13 @@ class MainView(Window):
 
         # update the mesh view label
         if hasattr(self.mesh_view, "label"):
-            new_text = f"{axis_str_suffix.title()} Segmentation Result (3D Mesh View)"
+            new_text = f"{"Draft" if is_draft else ""} {axis_str_suffix.title()} Segmentation Result (3D Mesh View)"
             self.mesh_view.label.config(text=new_text)
-        
-        # store the segmentation result for later exporting
-        self.last_video_segments = video_segments
     
     def _export_3d_mesh(self) -> None:
         """
         Exports the 3D mesh currently displayed in the mesh view as an STL file.
-        Uses the latest segmentation (stored in self.last_video_segments)
+        Uses the latest segmentation
         to recompute the mesh using an optimised marching cubes approach.
         """
         try:
@@ -765,33 +860,12 @@ class MainView(Window):
             return
     
         # ensure segmentation has been run, else, 3d segmentation mesh will not exist
-        if not hasattr(self, "last_video_segments"):
+        if not hasattr(self, "current_mesh_data"):
             tk.messagebox.showerror("Error", "No segmentation available to export.")
             return
-
-        video_segments = self.last_video_segments
-
-        # Assume all frames have the same dimensions and combine them per object.
-        z_dim = len(video_segments)
-        first_frame_object_ids = list(video_segments[0].keys())
-        shape = video_segments[0][first_frame_object_ids[0]].shape  # (1, H, W) or (H, W)
-        x_dim = shape[1]
-        y_dim = shape[2]
-        combined_meshes = {obj_id: np.zeros((z_dim, x_dim, y_dim), dtype=int) for obj_id in first_frame_object_ids}
-
-        for z, frame_data in video_segments.items():
-            for obj_id, mask in frame_data.items():
-                # remove any extra dimensions if needed
-                combined_meshes[obj_id][z, :, :] = np.squeeze(mask)
         
         stl_meshes = []
-        for obj_id, combined_mesh in combined_meshes.items():
-            try:
-                verts, faces, _, _ = measure.marching_cubes(combined_mesh, level=0.5)
-            except Exception as e:
-                continue
-        
-            # convert faces into triangles using the vertices
+        for verts, faces, obj_id in self.current_mesh_data:
             triangles = verts[faces] # shape: (n_faces, 3, 3)
             m = mesh.Mesh(np.zeros(triangles.shape[0], dtype=mesh.Mesh.dtype))
             for i, triangle in enumerate(triangles):
@@ -801,7 +875,7 @@ class MainView(Window):
         if not stl_meshes:
             tk.messagebox.showerror("Export Error", "No valid mesh could be generated.")
             return
-    
+
         # combine all mesh data into one STL
         combined_data = np.concatenate([m.data for m in stl_meshes])
         exported_mesh = mesh.Mesh(combined_data.copy())
@@ -859,8 +933,15 @@ class MainView(Window):
 
         active_index = self.sidebar.tabControl.index("current")
         axis = active_index
-        mask_dict = self._get_mask(axis)
+        current_tab = self.sidebar.tabs[active_index]
+
         num_slices = original_np.shape[axis]
+
+        if current_tab.draft_selection_var.get():
+            mask_dict = self._get_mask(axis, is_draft=True)
+        else:
+            mask_dict = self._get_mask(axis)
+
         if mask_dict is None:
             tk.messagebox.showerror("Export Error", "No segmentation mask available for selected view.")
             return
@@ -987,7 +1068,7 @@ class MainView(Window):
         else:
             raise ValueError("Invalid axis number. Must be 0, 1, or 2.")
         
-    def _get_mask(self, axis: int) -> SegmentationResult:
+    def _get_mask(self, axis: int, is_draft: bool = False) -> SegmentationResult:
         """
         Returns the canvas corresponding to the specified axis.
 
@@ -998,11 +1079,11 @@ class MainView(Window):
             dict: The segmentation mask associated with the specified axis.
         """
         if axis == 0:
-            return self.axial_view_mask
+            return self.draft_axial_view_mask if is_draft else self.axial_view_mask
         elif axis == 1:
-            return self.coronal_view_mask
+            return self.draft_coronal_view_mask if is_draft else self.coronal_view_mask
         elif axis == 2:
-            return self.sagittal_view_mask
+            return self.draft_sagittal_view_mask if is_draft else self.sagittal_view_mask
         else:
             raise ValueError("Invalid axis number. Must be 0, 1, or 2.")
 
@@ -1010,6 +1091,9 @@ class MainView(Window):
         """
         Clears the 3D mesh view (i.e. removes any previously segmented mesh).
         """
+        self.last_result = None
+        self.last_draft_result = None
+        
         fig = self.mesh_view.canvas.figure
         fig.clf()  # Clear all content from the figure
         # Re-create an empty 3D axes with a title.

@@ -95,9 +95,13 @@ class Sidebar(Frame):
             tab.pointer_color_var = None
             tab.pointer_color_optionmenu = None
             tab.points_listbox = None
+            tab.draft_points = []
             tab.points = []
+            tab.draft_line_objects = []
             tab.line_objects = []
+            tab.draft_undo_stack =[]
             tab.undo_stack = []
+            tab.draft_redo_stack = []
             tab.redo_stack = []
 
         for tab in self.tabs:
@@ -159,7 +163,21 @@ class Sidebar(Frame):
             separator1.pack(fill="x", pady=10)
 
             tab.draft_selection_var = ttk.BooleanVar(value=False)
-            draft_check = Checkbutton(content_frame, text="Draft Mode", variable=tab.draft_selection_var)
+            draft_check = Checkbutton(
+                content_frame,
+                text="Draft Mode",
+                variable=tab.draft_selection_var,
+                command=lambda tab=tab, axis=self.tabs.index(tab): (
+                    self.view._update_slice(
+                        self.view._get_canvas(axis).figure.axes[0],
+                        self.view._get_canvas(axis),
+                        axis,
+                        int(self.view._get_canvas(axis).slider.get()),
+                        "Axial View" if axis == 0 else "Coronal View" if axis == 1 else "Sagittal View"
+                    ),
+                    self.view.update_mesh_view("AXIAL" if axis == 0 else "CORONAL" if axis == 1 else "SAGITTAL")
+                )
+            )
             draft_check.pack(pady=(0, 2))
 
             draft_points_label = Label(content_frame, text="Draft Points")
@@ -178,15 +196,15 @@ class Sidebar(Frame):
             draft_undo_redo_frame.columnconfigure(0, weight=1)
             draft_undo_redo_frame.columnconfigure(1, weight=1)
 
-            tab.draft_btn_undo = Button(draft_undo_redo_frame, text="Undo", command=print("Draft Undo Click"),
+            tab.draft_btn_undo = Button(draft_undo_redo_frame, text="Undo", command=lambda: self._on_undo_click(True),
                                         bootstyle="info", image=self.undo_icon, compound="left")
             tab.draft_btn_undo.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-            tab.draft_btn_redo = Button(draft_undo_redo_frame, text="Redo", command=print("Draft Redo Click"),
+            tab.draft_btn_redo = Button(draft_undo_redo_frame, text="Redo", command=lambda: self._on_redo_click(True),
                                         bootstyle="info", image=self.redo_icon, compound="left")
             tab.draft_btn_redo.grid(row=0, column=1, sticky="ew")
 
             tab.merge_drafts_btn = Button(content_frame, text="Merge Drafts into Selected",
-                                          command=print("Merge Drafts Click"),
+                                          command=lambda: self.controller.merge_drafts() if self.controller else None,
                                           image=self.merge_icon, compound="left",
                                           style="DarkGreen.TButton")
             tab.merge_drafts_btn.pack(fill="x", pady=(2, 2))
@@ -208,10 +226,10 @@ class Sidebar(Frame):
             undo_redo_frame.columnconfigure(0, weight=1)
             undo_redo_frame.columnconfigure(1, weight=1)
 
-            btn_undo = Button(undo_redo_frame, text="Undo", command=self._on_undo_click,
+            btn_undo = Button(undo_redo_frame, text="Undo", command=lambda: self._on_undo_click(False),
                               bootstyle="info", image=self.undo_icon, compound="left")
             btn_undo.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-            btn_redo = Button(undo_redo_frame, text="Redo", command=self._on_redo_click,
+            btn_redo = Button(undo_redo_frame, text="Redo", command=lambda: self._on_redo_click(False),
                               bootstyle="info", image=self.redo_icon, compound="left")
             btn_redo.grid(row=0, column=1, sticky="ew")
 
@@ -268,10 +286,10 @@ class Sidebar(Frame):
         if self.view:
             self.view._export_view_with_mask()
 
-    def _on_undo_click(self) -> None:
+    def _on_undo_click(self, is_draft: bool = False) -> None:
         if self.view:
-            self.view._on_undo_click()
+            self.view._on_undo_click(is_draft)
 
-    def _on_redo_click(self) -> None:
+    def _on_redo_click(self, is_draft: bool = False) -> None:
         if self.view:
-            self.view._on_redo_click()
+            self.view._on_redo_click(is_draft)
