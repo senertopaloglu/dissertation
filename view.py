@@ -1163,8 +1163,21 @@ class MainView(Window):
         self.mesh_view.canvas.draw()
     
     def update_global_segmentation_state(self) -> None:
-        # Enable if any tab contains at least one point; else disable.
-        enable = any(tab.points for tab in self.sidebar.tabs)
+        """
+        Update the state of the global segmentation checkbox.
+
+        This method enables or disables the global segmentation checkbox
+        based on the current mode and the presence of points. When in draft mode,
+        the checkbox is enabled if at least one tab has draft points. Otherwise, it
+        is enabled if at least one tab has non-draft points.
+
+        Returns:
+            None.
+        """
+        if self.sidebar.global_draft_mode.get():
+            enable = any(tab.draft_points for tab in self.sidebar.tabs)
+        else:
+            enable = any(tab.points for tab in self.sidebar.tabs)
         state = "normal" if enable else "disabled"
         for tab in self.sidebar.tabs:
             tab.global_segmentation_checkbox.config(state=state)
