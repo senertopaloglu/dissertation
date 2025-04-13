@@ -116,7 +116,7 @@ class Sidebar(Frame):
 
         merge_all_btn = Button(
             group_frame,
-            text="Merge All Drafts",
+            text="Accept & Merge All Drafts",
             command=lambda: self.controller.merge_all_drafts() if self.controller else None,
             style="DarkerTurquoise.TButton",
             image=self.merge_all_icon,
@@ -212,7 +212,7 @@ class Sidebar(Frame):
             draft_frame.grid_rowconfigure(0, weight=1)
             draft_frame.grid_rowconfigure(1, weight=0)
             draft_frame.grid_columnconfigure(0, weight=1)
-            points_notebook.add(selected_frame, text="Selected Points")
+            points_notebook.add(selected_frame, text="Final Points")
             points_notebook.add(draft_frame, text="Draft Points")
             points_notebook.pack(fill="both", expand=True, pady=(0,10))
 
@@ -257,7 +257,7 @@ class Sidebar(Frame):
             # add merge drafts button in the draft frame
             tab.merge_drafts_btn = Button(
                 draft_btn_frame,
-                text="Merge Drafts",
+                text="Accept & Merge View Drafts",
                 command=lambda: self.controller.merge_drafts() if self.controller else None,
                 style="DarkerTurquoise.TButton",
                 image=self.merge_icon,

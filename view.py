@@ -1208,7 +1208,7 @@ class MainView(Window):
 
     def update_tabs(self) -> None:
         """
-        Select the correct tab (Draft or Selected Points) in the view tabs.
+        Select the correct tab (Draft or Final Points) in the view tabs.
         """
         for tab in self.sidebar.tabs:
             if self.sidebar.global_draft_mode.get():
