@@ -69,8 +69,11 @@ class Sidebar(Frame):
                   background=[("selected", "white")],
                   foreground=[("selected", "black")])
         
-        # style for draft checkbox text
+        # style for draft mode checkbox text
         style.configure('LargeFont.TCheckbutton', font=('TkDefaultFont', 10, 'bold'))
+
+        # style for global view segmentation checkbox text
+        style.configure('StandardFont.TCheckbutton', font=('TkDefaultFont', 10))
 
         # Import and Export Buttons
         btn_import_nifti = Button(self, text="Import NIfTI File", command=self._import_nifti,
@@ -135,13 +138,13 @@ class Sidebar(Frame):
         self.tabControl = tabControl
         self.tabs = [tab1, tab2, tab3]
 
-        # Initialize each tab’s properties and build its UI.
+        # for each tab: init properties and build its UI.
         for i, tab in enumerate(self.tabs):
             tab.style_name = f"PointerColor.TMenubutton.Tab{i}"
             style.layout(tab.style_name, style.layout("TMenubutton"))
             tab.pointer_color_var = None
             tab.pointer_color_optionmenu = None
-            tab.points_listbox = None
+            tab.final_points_listbox = None
             tab.draft_points = []
             tab.points = []
             tab.draft_line_objects = []
@@ -169,7 +172,7 @@ class Sidebar(Frame):
             pointer_frame = Frame(content_frame)
             pointer_frame.pack(fill="x", pady=(2, 2))
 
-            pointer_label = Label(pointer_frame, text="Pointer colour:")
+            pointer_label = Label(pointer_frame, text="Pointer colour:", font=("TkDefaultFont", 10))
             pointer_label.pack(side="left")
             colors = ["Red", "Blue", "Green", "Orange", "Purple", "Cyan", "Magenta", "Teal", "Black", "Gray"]
             tab.pointer_color_optionmenu = OptionMenu(pointer_frame, pointer_color_var, "")
@@ -205,36 +208,71 @@ class Sidebar(Frame):
             pointer_color_var.trace_add("write", update_option_menu_color)
             update_option_menu_color()
 
-            # create a nested notebook for points
-            points_notebook = Notebook(content_frame, style="DarkerTabs.TNotebook")
-            selected_frame = Frame(points_notebook, padding=(5,5))
-            draft_frame = Frame(points_notebook, padding=(5,5))
-            draft_frame.grid_rowconfigure(0, weight=1)
-            draft_frame.grid_rowconfigure(1, weight=0)
-            draft_frame.grid_columnconfigure(0, weight=1)
-            points_notebook.add(selected_frame, text="Final Points")
-            points_notebook.add(draft_frame, text="Draft Points")
-            points_notebook.pack(fill="both", expand=True, pady=(0,10))
+            points_container = Frame(content_frame)
+            points_container.pack(fill="both", expand=True, pady=(0, 10))
 
-            tab.points_notebook = points_notebook
-            tab.selected_frame = selected_frame
-            tab.draft_frame = draft_frame
+            final_points_frame = Frame(points_container, padding=(0,5))
+            final_points_frame.pack(fill="both", expand=True)
 
-            # build the draft points tab
-            draft_list_frame = Frame(draft_frame)
-            draft_list_frame.grid(row=0, column=0, sticky="nsew")
+            draft_points_frame = Frame(points_container, padding=(0,5))
+            draft_points_frame.pack(fill="both", expand=True)
+            # initially, draft mode is false so hide the draft points frame
+            draft_points_frame.pack_forget()
 
+            tab.draft_points_frame = draft_points_frame
+            tab.final_points_frame = final_points_frame
+
+            # build final (non-draft) points frame
+            final_label = Label(final_points_frame, text="Selected Points:", font=("TkDefaultFont", 10))
+            final_label.pack(side="top", anchor="w")
+            final_list_frame = Frame(final_points_frame)
+            final_list_frame.pack(side="top", fill="both", expand=True)
+            final_scrollbar = ttk.Scrollbar(final_list_frame, orient="vertical")
+            tab.final_points_listbox = tk.Listbox(final_list_frame, yscrollcommand=final_scrollbar.set)
+            tab.final_points_listbox.pack(side="left", fill="both", expand=True)
+            final_scrollbar.config(command=tab.final_points_listbox.yview)
+            final_scrollbar.pack(side="right", fill="y")
+            final_btn_frame = Frame(final_points_frame)
+            final_btn_frame.pack(side="bottom", fill="x", pady=(2, 0))
+            final_btn_frame.columnconfigure(0, weight=1)
+            final_btn_frame.columnconfigure(1, weight=1)
+            final_btn_undo = Button(
+                final_btn_frame,
+                text="Undo",
+                command=lambda: self._on_undo_click(False),
+                bootstyle="info",
+                image=self.undo_icon,
+                compound="left"
+            )
+            final_btn_undo.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+            final_btn_redo = Button(
+                final_btn_frame,
+                text="Redo",
+                command=lambda: self._on_redo_click(False),
+                bootstyle="info",
+                image=self.redo_icon,
+                compound="left"
+            )
+            final_btn_redo.grid(row=0, column=1, sticky="ew")
+
+            # build draft points frame
+            draft_label_frame = Frame(draft_points_frame)
+            draft_label_frame.pack(side="top", anchor="w")
+            draft_prefix = Label(draft_label_frame, text="[DRAFT]", font=("TkDefaultFont", 10, "bold"))
+            draft_prefix.pack(side="left")
+            draft_label = Label(draft_label_frame, text="Selected Points:", font=("TkDefaultFont", 10))
+            draft_label.pack(side="left")
+            draft_list_frame = Frame(draft_points_frame)
+            draft_list_frame.pack(side="top", fill="both", expand=True)
             draft_scrollbar = ttk.Scrollbar(draft_list_frame, orient="vertical")
             tab.draft_points_listbox = tk.Listbox(draft_list_frame, yscrollcommand=draft_scrollbar.set)
             tab.draft_points_listbox.pack(side="left", fill="both", expand=True)
             draft_scrollbar.config(command=tab.draft_points_listbox.yview)
             draft_scrollbar.pack(side="right", fill="y")
-
-            draft_btn_frame = Frame(draft_frame)
-            draft_btn_frame.grid(row=1, column=0, sticky="ew", pady=(2, 0))
+            draft_btn_frame = Frame(draft_points_frame)
+            draft_btn_frame.pack(side="bottom", fill="x", pady=(2, 0))
             draft_btn_frame.columnconfigure(0, weight=1)
             draft_btn_frame.columnconfigure(1, weight=1)
-
             tab.draft_btn_undo = Button(
                 draft_btn_frame,
                 text="Undo",
@@ -253,8 +291,6 @@ class Sidebar(Frame):
                 compound="left"
             )
             tab.draft_btn_redo.grid(row=0, column=1, sticky="ew")
-
-            # add merge drafts button in the draft frame
             tab.merge_drafts_btn = Button(
                 draft_btn_frame,
                 text="Accept & Merge View Drafts",
@@ -265,46 +301,14 @@ class Sidebar(Frame):
             )
             tab.merge_drafts_btn.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 2))
 
-            # build the selected points tab
-            sel_list_frame = Frame(selected_frame)
-            sel_list_frame.pack(side="top", fill="both", expand=True)
-
-            sel_scrollbar = ttk.Scrollbar(sel_list_frame, orient="vertical")
-            tab.points_listbox = tk.Listbox(sel_list_frame, height=5, yscrollcommand=sel_scrollbar.set)
-            tab.points_listbox.pack(side="left", fill="both", expand=True)
-            sel_scrollbar.config(command=tab.points_listbox.yview)
-            sel_scrollbar.pack(side="right", fill="y")
-
-            sel_btn_frame = Frame(selected_frame)
-            sel_btn_frame.pack(side="bottom", fill="x", pady=(2, 0))
-            sel_btn_frame.columnconfigure(0, weight=1)
-            sel_btn_frame.columnconfigure(1, weight=1)
-            btn_undo = Button(
-                sel_btn_frame,
-                text="Undo",
-                command=lambda: self._on_undo_click(False),
-                bootstyle="info",
-                image=self.undo_icon,
-                compound="left"
-            )
-            btn_undo.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-            btn_redo = Button(
-                sel_btn_frame,
-                text="Redo",
-                command=lambda: self._on_redo_click(False),
-                bootstyle="info",
-                image=self.redo_icon,
-                compound="left"
-            )
-            btn_redo.grid(row=0, column=1, sticky="ew")
-
             tab.global_segmentation_checkbox = Checkbutton(
                 content_frame,
                 text="Global view segmentation\n(show on axial view)",
                 variable=self.global_segmentation_var,
+                style="StandardFont.TCheckbutton",
                 state="disabled"  # disabled by default
             )
-            tab.global_segmentation_checkbox.pack(fill="x", pady=(0, 2))
+            tab.global_segmentation_checkbox.pack(anchor="center", pady=(0, 2))
 
             tab.btn_segment = Button(content_frame, text="Segment Image",
                                      command=self._segment_image,

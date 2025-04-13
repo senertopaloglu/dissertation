@@ -649,7 +649,7 @@ class MainView(Window):
         if is_draft:
             target_listbox = current_tab.draft_points_listbox
         else:
-            target_listbox = current_tab.points_listbox
+            target_listbox = current_tab.final_points_listbox
 
         target_listbox.insert("end", f"{prefix} at ({x},{y})")
         idx = target_listbox.size()-1
@@ -672,7 +672,7 @@ class MainView(Window):
         if is_draft:
             points_listbox = current_tab.draft_points_listbox
         else:
-            points_listbox = current_tab.points_listbox
+            points_listbox = current_tab.final_points_listbox
         
         if points_listbox.size() > 0:
             points_listbox.delete("end")
@@ -685,7 +685,7 @@ class MainView(Window):
     def clear_listbox(self) -> None:
         active_index = self.sidebar.tabControl.index("current")
         current_tab = self.sidebar.tabs[active_index]
-        current_tab.points_listbox.delete(0, "end")
+        current_tab.final_points_listbox.delete(0, "end")
         
         canvas = None
         canvas = self._get_canvas(active_index)
@@ -1208,13 +1208,15 @@ class MainView(Window):
 
     def update_tabs(self) -> None:
         """
-        Select the correct tab (Draft or Final Points) in the view tabs.
+        Selects the correct points listbox (Draft or Final Points) for each view.
         """
         for tab in self.sidebar.tabs:
             if self.sidebar.global_draft_mode.get():
-                tab.points_notebook.select(tab.draft_frame)
+                tab.final_points_frame.pack_forget()
+                tab.draft_points_frame.pack(fill="both", expand=True, pady=(0,10))
             else:
-                tab.points_notebook.select(tab.selected_frame)
+                tab.draft_points_frame.pack_forget()
+                tab.final_points_frame.pack(fill="both", expand=True, pady=(0,10))
 
     def _on_close(self) -> None:
         """

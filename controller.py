@@ -140,7 +140,7 @@ class SegmentationController:
                     line = current_tab.draft_line_objects.pop()
                     line.remove()
         else:
-            if current_tab.points and current_tab.points_listbox.size() > 0:
+            if current_tab.points and current_tab.final_points_listbox.size() > 0:
                 removed_point = current_tab.points.pop()
                 current_tab.redo_stack.append(removed_point)
                 self.view.remove_last_point_from_listbox(is_draft)
@@ -211,12 +211,12 @@ class SegmentationController:
     def refresh_selection_state(self) -> None:
         # Iterate over all tabs and reset their state.
         for tab in self.view.sidebar.tabs:
-            # Clear the draft listbox (if it exists)
+            # Clear the draft listbox
             if tab.draft_points_listbox:
                 tab.draft_points_listbox.delete(0, "end")
-            # Clear the listbox (if it exists)
-            if tab.points_listbox:
-                tab.points_listbox.delete(0, "end")
+            # Clear the listbox
+            if tab.final_points_listbox:
+                tab.final_points_listbox.delete(0, "end")
             
             # Remove any drawn draft line objects from the canvas.
             while tab.draft_line_objects:
@@ -677,15 +677,15 @@ class SegmentationController:
         current_tab.points = merged_points
         
         # Clear and repopulate the final points listbox.
-        if current_tab.points_listbox:
-            current_tab.points_listbox.delete(0, "end")
+        if current_tab.final_points_listbox:
+            current_tab.final_points_listbox.delete(0, "end")
             for pt in merged_points:
                 x, y, color, pos_flag = pt
                 prefix = "Positive click" if pos_flag else "Negative click"
-                current_tab.points_listbox.insert("end", f"{prefix} at ({x},{y})")
-                idx = current_tab.points_listbox.size() - 1
+                current_tab.final_points_listbox.insert("end", f"{prefix} at ({x},{y})")
+                idx = current_tab.final_points_listbox.size() - 1
                 try:
-                    current_tab.points_listbox.itemconfig(idx, {'fg': color.lower()})
+                    current_tab.final_points_listbox.itemconfig(idx, {'fg': color.lower()})
                 except Exception as e:
                     print(f"Error setting color in listbox: {e}")
         
