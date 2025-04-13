@@ -72,6 +72,9 @@ class Sidebar(Frame):
         # style for draft checkbox text
         style.configure('LargeFont.TCheckbutton', font=('TkDefaultFont', 10, 'bold'))
 
+        # style for global view segmentation checkbox text
+        style.configure('StandardFont.TCheckbutton', font=('TkDefaultFont', 10))
+
         # Import and Export Buttons
         btn_import_nifti = Button(self, text="Import NIfTI File", command=self._import_nifti,
                              bootstyle="primary", image=self.import_icon, compound="left")
@@ -169,7 +172,7 @@ class Sidebar(Frame):
             pointer_frame = Frame(content_frame)
             pointer_frame.pack(fill="x", pady=(2, 2))
 
-            pointer_label = Label(pointer_frame, text="Pointer colour:")
+            pointer_label = Label(pointer_frame, text="Pointer colour:", font=("TkDefaultFont", 10))
             pointer_label.pack(side="left")
             colors = ["Red", "Blue", "Green", "Orange", "Purple", "Cyan", "Magenta", "Teal", "Black", "Gray"]
             tab.pointer_color_optionmenu = OptionMenu(pointer_frame, pointer_color_var, "")
@@ -270,7 +273,7 @@ class Sidebar(Frame):
             sel_list_frame.pack(side="top", fill="both", expand=True)
 
             sel_scrollbar = ttk.Scrollbar(sel_list_frame, orient="vertical")
-            tab.points_listbox = tk.Listbox(sel_list_frame, height=5, yscrollcommand=sel_scrollbar.set)
+            tab.points_listbox = tk.Listbox(sel_list_frame, yscrollcommand=sel_scrollbar.set)
             tab.points_listbox.pack(side="left", fill="both", expand=True)
             sel_scrollbar.config(command=tab.points_listbox.yview)
             sel_scrollbar.pack(side="right", fill="y")
@@ -302,9 +305,10 @@ class Sidebar(Frame):
                 content_frame,
                 text="Global view segmentation\n(show on axial view)",
                 variable=self.global_segmentation_var,
+                style="StandardFont.TCheckbutton",
                 state="disabled"  # disabled by default
             )
-            tab.global_segmentation_checkbox.pack(fill="x", pady=(0, 2))
+            tab.global_segmentation_checkbox.pack(anchor="center", pady=(0, 2))
 
             tab.btn_segment = Button(content_frame, text="Segment Image",
                                      command=self._segment_image,
