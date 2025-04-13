@@ -986,7 +986,7 @@ class MainView(Window):
         Carries out the export process using the chosen format:
           - BINARY: Convert composite volume to binary image.
           - GRAYSCALE: Convert composite volume to a weighted grayscale image.
-          - RGB: Retain the composite volume as is.
+          - RGB: Overlay each segmentation mask on the original image in RGB format.
         """
         alpha = 0.4
 
@@ -1036,10 +1036,10 @@ class MainView(Window):
             # convert grayscale to RGB
             rgb = np.stack([norm_slice_255] * 3, axis=-1).astype(np.float32)
             
-            # in binary mode, start with a black canvas, else start with original image
+            # if binary or grayscale; start with a black canvas
             if chosen_format == ExportFormat.BINARY or chosen_format == ExportFormat.GRAYSCALE:
                 composite = np.zeros_like(rgb)
-            else:
+            else: # start with original rgb image
                 composite = rgb.copy()
 
             # if a segmentation mask exists for this slice, overlay each object. 
@@ -1062,16 +1062,12 @@ class MainView(Window):
                         # only update pixels where mask is active without affecting other overlays
                         composite = np.where(mask_expanded > 0, (1-alpha) * composite + alpha * overlay, composite)
                     else:
-                        # Get pointer color for this object, default to red if missing.
-                        color_name = self.pointer_color_mapping.get(obj_id, "red")
-                        rgb_color = np.array(mcolors.to_rgb(color_name)) * 255
-                        # Prepare an overlay of the pointer color.
-                        overlay = np.zeros_like(composite)
-                        overlay[:, :, 0] = rgb_color[0]
-                        overlay[:, :, 1] = rgb_color[1]
-                        overlay[:, :, 2] = rgb_color[2]
-                        # Alpha blend the overlay where mask is True.
-                        composite = (1 - alpha * mask_expanded) * composite + (alpha * mask_expanded) * overlay
+                        colour_name = self.pointer_color_mapping.get(obj_id, "red")
+                        colour_rgb = np.array(mcolors.to_rgb(colour_name)) * 255
+                        overlay = np.full_like(composite, colour_rgb)
+                        # blend overlay with original image using alpha
+                        composite = np.where(mask_expanded > 0, (1 - alpha) * composite + alpha * overlay, composite)
+                    
                 if chosen_format != ExportFormat.BINARY:
                     composite = np.clip(composite, 0, 255)
             
