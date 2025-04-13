@@ -148,6 +148,30 @@ class MainView(Window):
         mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
         ax.imshow(mask_image)
 
+    def _create_title_frame(self, parent: ttk.Frame, text: str) -> ttk.Frame:
+        """
+        Create a composite title widget with a left label for the draft prefix (initially empty)
+        and a right label for the view title (e.g. "Axial View").
+        """
+        title_frame = ttk.Frame(parent)
+
+        # Label for "[DRAFT] " (bold)
+        draft_text = "[DRAFT] " if self.sidebar.global_draft_mode.get() else ""
+        draft_label = ttk.Label(title_frame, text=draft_text, font=("TkDefaultFont", 13, "bold"))
+        draft_label.grid(row=0, column=0, sticky="e")
+        
+        # Label for the view name (normal)
+        view_label = ttk.Label(title_frame, text=text, font=("TkDefaultFont", 13))
+        view_label.grid(row=0, column=1, sticky="w")
+
+        title_frame.columnconfigure(0, weight=1)
+        title_frame.columnconfigure(1, weight=1)
+
+        # Store references for later updates
+        title_frame.draft_label = draft_label
+        title_frame.view_label = view_label
+        return title_frame
+
     def _create_image_frame(self, text: str, axis: int) -> Frame:
         """
         Creates a labeled frame containing a Matplotlib FigureCanvas along with a slider 
@@ -165,10 +189,9 @@ class MainView(Window):
         content_frame = Frame(outer_frame)
         content_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
-        label = Label(content_frame, text=text, font=("TkDefaultFont", 13))
-        label.pack(side="top", fill="x", expand=True, pady=(5,0))
-        label.configure(anchor="center", justify="center")
-        outer_frame.label = label
+        title_frame = self._create_title_frame(content_frame, text)
+        title_frame.pack(side="top", fill="x", pady=(5,0))
+        outer_frame.title_frame = title_frame
 
         control_frame = Frame(content_frame)
         control_frame.pack(side="top", fill="x", pady=5)
@@ -274,9 +297,9 @@ class MainView(Window):
         content_frame = Frame(outer_frame)
         content_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        label = Label(content_frame, text=text, font=("TkDefaultFont", 13))
-        label.pack(pady=(5,0))
-        outer_frame.label = label
+        title_frame = self._create_title_frame(content_frame, text)
+        title_frame.pack(side="top", fill="x", pady=(5,0))
+        outer_frame.title_frame = title_frame  # store for later updates
 
         fig = Figure(figsize=(4,4))
         ax = fig.add_subplot(111, projection='3d')
@@ -798,8 +821,9 @@ class MainView(Window):
             fig.clf()  # Clear current figure
             ax = fig.add_subplot(111, projection='3d')
             if hasattr(self.mesh_view, "label"):
-                new_text = f'{"[Draft]" if is_draft else ""} Segmentation Results (3D Mesh View)'
-                self.mesh_view.label.config(text=new_text)
+                draft_text = "[DRAFT]" if is_draft else ""
+                self.mesh_view.title_frame.draft_label.config(text=draft_text)
+                self.mesh_view.title_frame.view_label.config(text="Segmentation Results (3D Mesh View)")
             self.mesh_view.canvas.draw()
             return
         
@@ -896,8 +920,9 @@ class MainView(Window):
 
         # update the mesh view label
         if hasattr(self.mesh_view, "label"):
-            new_text = f'{"[Draft]" if is_draft else ""} Segmentation Result (3D Mesh View)'
-            self.mesh_view.label.config(text=new_text)
+            draft_text = "[DRAFT]" if is_draft else ""
+            self.mesh_view.title_frame.draft_label.config(text=draft_text)
+            self.mesh_view.title_frame.view_label.config(text="Segmentation Results (3D Mesh View)")
     
     def _export_3d_mesh(self) -> None:
         """
@@ -1155,7 +1180,9 @@ class MainView(Window):
         fig.clf()  # Clear all content from the figure
         # Re-create an empty 3D axes with a title.
         ax = fig.add_subplot(111, projection='3d')
-        self.mesh_view.label.configure(text="Segmentation Result (3D Mesh View)")
+        draft_text = "[DRAFT]" if self.sidebar.global_draft_mode.get() else ""
+        self.mesh_view.title_frame.draft_label.configure(text=draft_text)
+        self.mesh_view.title_frame.view_label.configure(text="Segmentation Result (3D Mesh View)")
         self.mesh_view.canvas.draw()
     
     def update_global_segmentation_state(self) -> None:
@@ -1196,11 +1223,16 @@ class MainView(Window):
         Update the labels for the Axial, Coronal, and Sagittal frames.
         If global draft mode is enabled, prepend "[DRAFT]" to each label.
         """
-        prefix = "[DRAFT] " if self.sidebar.global_draft_mode.get() else ""
-        self.axial_view.label.config(text=f"{prefix}Axial View")
-        self.coronal_view.label.config(text=f"{prefix}Coronal View")
-        self.sagittal_view.label.config(text=f"{prefix}Sagittal View")
-        self.mesh_view.label.config(text=f"{prefix}Segmentation Result (3D Mesh View)")
+        draft_text = "[DRAFT]" if self.sidebar.global_draft_mode.get() else ""
+
+        self.axial_view.title_frame.draft_label.config(text=draft_text)
+        self.axial_view.title_frame.view_label.config(text="Axial View")
+        self.coronal_view.title_frame.draft_label.config(text=draft_text)
+        self.coronal_view.title_frame.view_label.config(text="Coronal View")
+        self.sagittal_view.title_frame.draft_label.config(text=draft_text)
+        self.sagittal_view.title_frame.view_label.config(text="Sagittal View")
+        self.mesh_view.title_frame.draft_label.config(text=draft_text)
+        self.mesh_view.title_frame.view_label.config(text="Segmentation Result (3D Mesh View)")
 
     def update_tabs(self) -> None:
         """

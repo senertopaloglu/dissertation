@@ -82,7 +82,7 @@ class Sidebar(Frame):
 
         btn_import_dicom = Button(self, text="Import DICOM Folder", command=self._import_dicom,
                                 bootstyle="primary", image=self.import_icon, compound="left")
-        btn_import_dicom.pack(fill="x", pady=(2,5))
+        btn_import_dicom.pack(fill="x", pady=(2,10))
 
         export_style = ttk.Style()
         export_style.configure("DarkGrey.TButton",
@@ -115,7 +115,7 @@ class Sidebar(Frame):
                 self.view.update_global_segmentation_state()
             )
         )
-        draft_check.pack(pady=5)
+        draft_check.pack(pady=(5,0))
 
         merge_all_btn = Button(
             group_frame,
@@ -163,7 +163,7 @@ class Sidebar(Frame):
 
             pos_click_var = ttk.BooleanVar(value=True)
             tab.pos_click_var = pos_click_var
-            pos_click_checkbox = Checkbutton(content_frame, text="Positive Click", variable=pos_click_var)
+            pos_click_checkbox = Checkbutton(content_frame, text="Positive Click", variable=pos_click_var, style="StandardFont.TCheckbutton")
             if not self.model.image:
                 pos_click_checkbox.config(state="disabled")
             pos_click_checkbox.pack(pady=(2, 0))
@@ -172,7 +172,7 @@ class Sidebar(Frame):
             pointer_frame = Frame(content_frame)
             pointer_frame.pack(fill="x", pady=(2, 2))
 
-            pointer_label = Label(pointer_frame, text="Pointer colour:", font=("TkDefaultFont", 10))
+            pointer_label = Label(pointer_frame, text="Pointer Colour:", font=("TkDefaultFont", 10))
             pointer_label.pack(side="left")
             colors = ["Red", "Blue", "Green", "Orange", "Purple", "Cyan", "Magenta", "Teal", "Black", "Gray"]
             tab.pointer_color_optionmenu = OptionMenu(pointer_frame, pointer_color_var, "")
@@ -303,7 +303,7 @@ class Sidebar(Frame):
 
             tab.global_segmentation_checkbox = Checkbutton(
                 content_frame,
-                text="Global view segmentation\n(show on axial view)",
+                text="Global View Segmentation\n(show on axial view)",
                 variable=self.global_segmentation_var,
                 style="StandardFont.TCheckbutton",
                 state="disabled"  # disabled by default
@@ -320,12 +320,12 @@ class Sidebar(Frame):
                                           text="Apply Multiresolution\nSegmentation",
                                           command=lambda t=tab: self.controller.multiresolution_segmentation(t) if self.model.image else None,
                                           image=self.segment_icon, compound="left", bootstyle="success")
-            tab.btn_auto_seg.pack(fill="x", pady=2)
+            tab.btn_auto_seg.pack(fill="x", pady=(2,10))
 
             tab.btn_export_view = ttk.Button(content_frame, text="Export View with\nSegmentation Masks",
                                              command=lambda: self._export_view_with_mask(),
                                              image=self.export_icon, compound="left", style="DarkGrey.TButton")
-            tab.btn_export_view.pack(fill="x", pady=2)
+            tab.btn_export_view.pack(fill="x", pady=(5,2))
 
     # The functions below forward user actions to the controller.
     def _import_nifti(self) -> None:
