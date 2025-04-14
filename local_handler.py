@@ -11,12 +11,13 @@ from type_aliases import Points, SegmentationResult
 from sam2.build_sam import build_sam2_video_predictor
 
 def run_segmentation(
-    points: Points,
+    points_np: Points,
     frame_idx: int,
     foldername: str,
     multi_resolution: bool,
     is_first: bool,
-    is_final: bool
+    is_final: bool,
+    is_global: bool
 ) -> SegmentationResult:
     """
     Runs segmentation on the specified volume slices frames using the provided points.
@@ -39,8 +40,8 @@ def run_segmentation(
         torch.backends.cudnn.allow_tf32 = True
     
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    sam2_checkpoint = os.path.join(BASE_DIR, "SAM_2_Medical_3D", "sam2_hiera_large.pt")
-    model_cfg = os.path.join(BASE_DIR, "SAM_2_Medical_3D", "sam2_configs", "sam2_hiera_l.yaml")
+    sam2_checkpoint = os.path.join(BASE_DIR, 'dissertation', "SAM_2_Medical_3D", "sam2_hiera_large.pt")
+    model_cfg = os.path.join(BASE_DIR, 'dissertation', "SAM_2_Medical_3D", "sam2_configs", "sam2_hiera_l.yaml")
 
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
 
@@ -58,27 +59,51 @@ def run_segmentation(
 
     prompts = {}  # contains all the clicks we add for visualisation
 
-    ann_frame_idx = frame_idx
+    if not is_global:
+        ann_frame_idx = frame_idx
+    else:
+        ann_frame_idx = None
 
-    for k, v in points.items():
+    for k, v in points_np.items():
         ann_obj_id = k
-        points = [[x[0], x[1]] for x in v]
-        labels = [x[2] for x in v]
-        points = np.array(points, dtype=np.float32)
-        labels = np.array(labels, np.int32)
-        prompts[ann_obj_id] = points, labels
-        _, out_obj_ids, out_mask_logits = predictor.add_new_points(
-            inference_state=inference_state,
-            frame_idx=ann_frame_idx,
-            obj_id=ann_obj_id,
-            points=points,
-            labels=labels,
-        )
-    
+        points = []
+        labels = []
+        if is_global:
+            for f_index, v in v.items():
+                if ann_frame_idx is None:
+                    ann_frame_idx = f_index
+                else:
+                    ann_frame_idx = min(ann_frame_idx, f_index)
+                points.extend([[x[0], x[1]] for x in v])
+                labels.extend([x[2] for x in v])
+                points_np = np.array(points, dtype=np.float32)
+                labels_np = np.array(labels, np.int32)
+                prompts[ann_obj_id] = points_np, labels_np
+                _, out_obj_ids, out_mask_logits = predictor.add_new_points(
+                    inference_state=inference_state,
+                    frame_idx=f_index,
+                    obj_id=ann_obj_id,
+                    points=points_np,
+                    labels=labels_np,
+                )
+        else:
+            points = [[x[0], x[1]] for x in v]
+            labels = [x[2] for x in v]
+            points_np = np.array(points, dtype=np.float32)
+            labels_np = np.array(labels, np.int32)
+            prompts[ann_obj_id] = points_np, labels_np
+            _, out_obj_ids, out_mask_logits = predictor.add_new_points(
+                inference_state=inference_state,
+                frame_idx=ann_frame_idx,
+                obj_id=ann_obj_id,
+                points=points_np,
+                labels=labels_np,
+            )
+
     if is_final:
         # run propagation throughout the volume and collect the results in a dict
         # prop forwards
-        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx):
             volume_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
@@ -106,7 +131,7 @@ def segment(
     multi_resolution: bool,
     is_first: bool,
     is_final: bool,
-    is_global: bool = False
+    is_global: bool = False,
 ) -> SegmentationResult:
     """
     Invokes segmentation on frames using provided annotation points.
@@ -131,6 +156,7 @@ def segment(
         foldername,
         multi_resolution,
         is_first,
-        is_final
+        is_final,
+        is_global
     )
     return volume_segments
