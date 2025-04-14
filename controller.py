@@ -360,6 +360,8 @@ class SegmentationController:
         Returns:
             None
         """
+        from datetime import datetime
+        self.segmentation_start_time = datetime.now()
         # get filename (without prefix and file format)
         filename = custom_filename if custom_filename is not None else self.model.filename
         if custom_filename is not None:
@@ -473,6 +475,11 @@ class SegmentationController:
     
         def finish_segmentation(volume_segments: SegmentationResult) -> None:
             progress_dialog.close()
+            from datetime import datetime
+            elapsed = datetime.now() - self.segmentation_start_time
+            elapsed_seconds = elapsed.total_seconds()
+            message = f"Segmentation completed in {elapsed_seconds:.2f} seconds."
+            print(message)
             if completion_callback:
                 completion_callback(volume_segments)
             else:
