@@ -879,6 +879,7 @@ class SegmentationController:
         self.view.last_draft_result = None
 
         self.view.sidebar.global_draft_mode.set(False)
+        self.view.update_tabs()
 
         # Update the current view slice to reflect merged points.
         canvas = self.view._get_canvas(active_index)
