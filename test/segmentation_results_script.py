@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 import glob
 import cv2
-from metrics import dice_coefficient, new_assd, DICE
+from test.metrics import dice_coefficient, new_assd, DICE
 
 def load_mask(filepath: str) -> np.ndarray:
     """
