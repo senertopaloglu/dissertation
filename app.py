@@ -3,7 +3,7 @@ import tkinter as tk
 
 from model import ImageModel
 from controller import SegmentationController
-from view import MainView
+from views.view import MainView
 
 # Example Usages:
 # Run locally via `python app.py --mode local` or `python app.py`

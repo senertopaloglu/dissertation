@@ -7,9 +7,8 @@ from matplotlib.backend_bases import MouseEvent
 from matplotlib.lines import Line2D
 
 from type_aliases import SegmentationResult
-from export_format import ExportFormat
-from sidebar import Sidebar
-from frame_builder import create_image_frame, create_mesh_view_frame
+from views.sidebar import Sidebar
+from views.frame_builder import create_image_frame, create_mesh_view_frame
 
 import tkinter as tk
 import ttkbootstrap as ttk

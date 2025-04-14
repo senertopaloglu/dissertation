@@ -15,7 +15,7 @@ from matplotlib.backend_bases import MouseEvent
 from dicom_to_nifti import DicomToNifti
 from model import ImageModel
 from stdout_capture import StdoutCapture
-from progress_dialog import ProgressDialog
+from views.progress_dialog import ProgressDialog
 
 import tkinter as tk
 from tkinter import messagebox
