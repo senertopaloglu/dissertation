@@ -36,9 +36,7 @@ if you come across any problems that are undocumented here, then please visit ht
 Documentation:
 1. navigate to top-level directory
 2. generate documentation via `pydoctor`
-windows cmd: `pydoctor --make-html --html-output docs --project-name "Interactive 3D Medical Imaging Segmentation" --docformat=google *.py`
-
-git bash: `pydoctor --make-html --html-output docs --project-name "Interactive 3D Medical Imaging Segmentation" --docformat=google ./*.py`
+windows cmd: `pydoctor --make-html --html-output docs --project-name "Interactive 3D Medical Imaging Segmentation" --docformat=google views/frame_builder.py views/sidebar.py views/progress_dialog.py views/view.py app.py controller.py dicom_to_nifti.py exporter.py local_handler.py modal_handler.py model.py nifti_to_jpg.py nifti_to_png.py stdout_capture.py`
 3. view documentation: a) `cd docs` b) `start index.html`
 
 DISCLAIMER:
