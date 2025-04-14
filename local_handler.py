@@ -105,7 +105,8 @@ def segment(
     foldername: str,
     multi_resolution: bool,
     is_first: bool,
-    is_final: bool
+    is_final: bool,
+    is_global: bool = False
 ) -> SegmentationResult:
     """
     Invokes segmentation on frames using provided annotation points.
