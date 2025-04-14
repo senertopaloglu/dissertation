@@ -904,7 +904,23 @@ class SegmentationController:
             self.merge_drafts(idx)
     
     def export_3d_mesh(self):
+        """
+        Exports the 3D mesh.
+
+        Calls the exporter.py (exporter controller) export_3d_mesh() function.
+
+        Returns:
+            None.
+        """
         self.exporter.export_3d_mesh()
 
     def export_view_with_mask(self):
+        """
+        Exports the current view with segmentation mask overlay.
+
+        Calls the exporter.py (exporter controller) export_view_with_mask() function.
+
+        Returns:
+            None.
+        """
         self.exporter.export_view_with_mask()

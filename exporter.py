@@ -25,7 +25,10 @@ class Exporter:
 
     def export_3d_mesh(self) -> None:
         """
-        Exports the 3D mesh of the segmentation as an STL file.
+        Exports the 3D mesh of the segmentation as an STL file, from draft (in draft mode) or final segmentation result.
+        
+        Returns:
+            None
         """
         try:
             from stl import mesh
@@ -72,7 +75,10 @@ class Exporter:
     def export_view_with_mask(self) -> None:
         """
         Displays a popup for the user to select the export format and then
-        exports the image with overlayed segmentation mask.
+        exports the volume with overlayed segmentation mask as NIfTI file.
+
+        Returns:
+            None
         """
         popup = tk.Toplevel(self.main_view)
         popup.title("Choose Export Color Format")
@@ -94,9 +100,15 @@ class Exporter:
         confirm_button = tk.Button(popup, text="OK", command=on_confirm)
         confirm_button.pack(pady=10)
 
-    def _export_view_with_mask_process(self, chosen_format) -> None:
+    def _export_view_with_mask_process(self, chosen_format: ExportFormat) -> None:
         """
-        Process export of the 3D image with segmentation overlay using the chosen format.
+        Helper function: handles overlay and transformation of segmentation mask onto slices of original 3d volume.
+
+        Args:
+            chosen_format (ExportFormat): The chosen export format (BINARY, GRAYSCALE, or color).
+
+        Returns:
+            None
         """
         alpha = 0.4
         original_np = np.asarray(self.main_view.model.image)
