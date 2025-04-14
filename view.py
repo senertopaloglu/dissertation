@@ -126,13 +126,17 @@ class MainView(Window):
     
     def show_mask(self, mask: np.ndarray, ax: Axes, obj_id: Optional[int] = None, random_color: bool = False) -> None:
         """
-        Render and display a segmentation mask overlay on the given matplotlib Axes.
+        Render and overlay a translucent, coloured segmentation mask on the given matplotlib Axes.
 
-        Parameters:
-            mask (ndarray): The segmentation mask array.
-            ax (matplotlib.axes.Axes): The Axes object where the mask will be overlaid.
-            obj_id (int, optional): Object ID to determine the base color mapping. Defaults to None.
-            random_color (bool, optional): If True, generates a random color for the mask. Defaults to False.
+        Args:
+            mask (np.ndarray): The segmentation mask array.
+            ax (Axes): The matplotlib Axes where the mask will be overlaid.
+            obj_id (Optional[int], optional): Identifier for the segmentation object to determine base color. 
+                Defaults to None.
+            random_color (bool, optional): If True, the mask is rendered with a random color. Defaults to False.
+
+        Returns:
+            None
         """
         if random_color:
             color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
@@ -152,6 +156,13 @@ class MainView(Window):
         """
         Create a composite title widget with a left label for the draft prefix (initially empty)
         and a right label for the view title (e.g. "Axial View").
+        
+        Args:
+            parent (ttk.Frame): The parent frame that will contain this title frame.
+            text (str): The view title to be displayed (e.g., "Axial View").
+
+        Returns:
+            ttk.Frame: The created title frame with draft and view labels.
         """
         title_frame = ttk.Frame(parent)
 
@@ -177,7 +188,7 @@ class MainView(Window):
         Creates a labeled frame containing a Matplotlib FigureCanvas along with a slider 
         and checkboxes to control the display of segmentation masks and points.
 
-        Parameters:
+        Args:
             text (str): The title text to be displayed on the frame.
             axis (int): The image axis associated with the frame.
 
@@ -286,7 +297,7 @@ class MainView(Window):
         the 3D plot. Click events are ignored in this view since it is not meant 
         for interactive segmentation.
 
-        Parameters:
+        Args:
             text (str): The title text to be displayed on the mesh view frame.
 
         Returns:
@@ -316,7 +327,7 @@ class MainView(Window):
         """
         Update the displayed slice in the given axis whenever the slider changes.
 
-        Parameters:
+        Args:
             ax (matplotlib.axes.Axes): The axes where the image slice is rendered.
             canvas (FigureCanvasTkAgg): The canvas containing the Matplotlib figure.
             axis (int): The image axis (0 for axial, 1 for coronal, 2 for sagittal).
@@ -557,7 +568,7 @@ class MainView(Window):
         """
         Display the segmentation mask in view of self.last_used_axis.
 
-        Parameters:
+        Args:
             segmentation_mask (dict): A dictionary containing segmentation masks keyed by slice index.
             axis_str_suffix (str): A string representing the image orientation (e.g., "AXIAL", "CORONAL", "SAGITTAL").
         """
@@ -619,7 +630,7 @@ class MainView(Window):
         """
         Internal method to pass click events to the controller's on_click.
 
-        Parameters:
+        Args:
             event: The matplotlib event triggered by a click.
             ax (matplotlib.axes.Axes): The Axes object where the click event occurred.
             canvas (FigureCanvasTkAgg): The canvas containing the matplotlib figure.
@@ -721,7 +732,7 @@ class MainView(Window):
         Plot the point on the specified Matplotlib Axes
         If no Axes object is provided, it defaults to the current active Axes.
 
-        Parameters:
+        Args:
             x (float): The x-coordinate of the point.
             y (float): The y-coordinate of the point.
             color (str): The color for the point (e.g., "red", "blue").
@@ -739,7 +750,7 @@ class MainView(Window):
         """
         Redraw the Matplotlib figure for the specified view.
 
-        Parameters:
+        Args:
             ax_idx (int, optional): An index representing the view to redraw.
                 - 0: Axial view
                 - 1: Coronal view
@@ -790,7 +801,7 @@ class MainView(Window):
         otherwise uses the non-draft masks. If no masks exist for the current mode, an empty
         3D mesh view is shown.
 
-        Parameters:
+        Args:
             axis_str_suffix (str): A string indicating the segmentation view orientation
                 (e.g., "AXIAL", "CORONAL", or "SAGITTAL").
         """
@@ -1135,7 +1146,7 @@ class MainView(Window):
         """
         Returns the canvas corresponding to the specified axis.
 
-        Parameters:
+        Args:
             axis (int): The axis number (0 for axial, 1 for coronal, 2 for sagittal).
 
         Returns:
@@ -1154,7 +1165,7 @@ class MainView(Window):
         """
         Returns the canvas corresponding to the specified axis.
 
-        Parameters:
+        Args:
             axis (int): The axis number (0 for axial, 1 for coronal, 2 for sagittal).
         
         Returns:

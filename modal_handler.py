@@ -205,7 +205,7 @@ def segment(
     is executed remotely, and results are returned as a dictionary mapping frame 
     indices to segmentation mask results.
 
-    Parameters:
+    Args:
         slices: Unused parameter for segmentation slices.
         points: A dictionary where keys are object IDs and values are lists of point coordinates and labels.
         frame_idx: The index of the reference frame for segmentation.

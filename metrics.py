@@ -5,14 +5,26 @@ import pydicom
 import glob
 import cv2
 import SimpleITK as sitk
-from scipy import ndimage
-from sklearn.neighbors import KDTree
+from typing import List
 
-def DICE(Vref,Vseg):
+def DICE(Vref: np.ndarray, Vseg: np.ndarray) -> float:
+    """
+    Compute the Dice Similarity Coefficient between two binary volumes.
+
+    The Dice coefficient is calculated as:
+      DICE = 2 * (|Vref ∩ Vseg|) / (|Vref| + |Vseg|)
+
+    Args:
+        Vref (np.ndarray): The ground truth binary volume.
+        Vseg (np.ndarray): The segmented binary volume.
+
+    Returns:
+        float: Dice coefficient.
+    """
     dice=2*(Vref & Vseg).sum()/(Vref.sum() + Vseg.sum())
     return dice
 
-def dice_coefficient(y_true, y_pred):
+def dice_coefficient(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     Compute the Dice coefficient between two segmentation masks.
     
@@ -30,7 +42,7 @@ def dice_coefficient(y_true, y_pred):
         return 1.0  # both masks are empty
     return 2.0 * intersection / float(denominator)
 
-def transformToRealCoordinates(indexPoints,dicom_dir):
+def transformToRealCoordinates(indexPoints: np.ndarray, dicom_dir: str) -> List[np.ndarray]:
     """
     This function transforms index points to the real world coordinates
     according to DICOM Patient-Based Coordinate System
@@ -70,7 +82,22 @@ def transformToRealCoordinates(indexPoints,dicom_dir):
 
     return realPoints
 
-def new_assd(Vref, Vseg, dicom_dir):
+def new_assd(Vref: np.ndarray, Vseg: np.ndarray, dicom_dir: str) -> float:
+    """
+    Compute the Average Symmetric Surface Distance (ASSD) between two volumes.
+
+    This function computes the border (surface) of each volume and converts the indices to real-world 
+    coordinates. It then calculates the average distance from the segmented border to the reference border 
+    and vice versa.
+
+    Args:
+        Vref (np.ndarray): The ground truth binary volume.
+        Vseg (np.ndarray): The segmented binary volume.
+        dicom_dir (str): The directory containing DICOM images used for coordinate transformation.
+
+    Returns:
+        float: The calculated ASSD.
+    """
     struct = ndimage.generate_binary_structure(3, 1)  
     
     ref_border=Vref ^ ndimage.binary_erosion(Vref, structure=struct, border_value=1)

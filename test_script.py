@@ -9,7 +9,13 @@ from metrics import dice_coefficient, new_assd, DICE
 
 def load_mask(filepath: str) -> np.ndarray:
     """
-    Load a PNG image and binarize it.
+    Load a PNG image and binarize it (foreground -> non-zero pixel).
+
+    Args:
+        filepath (str): The path to the PNG image.
+
+    Returns:
+        np.ndarray: A binarized image mask as a numpy array.
     """
     img = Image.open(filepath)
     data = np.array(img)
@@ -21,6 +27,16 @@ def load_mask(filepath: str) -> np.ndarray:
     return (data > 0).astype(np.uint8)
 
 def png_series_reader(dir: str, reverse: bool = False) -> np.ndarray:
+    """
+    Read a series of PNG images from a directory and stack them into a 3D numpy array.
+
+    Args:
+        directory (str): The directory containing PNG images.
+        reverse (bool, optional): If True, reverse the order of image files. Defaults to False.
+
+    Returns:
+        np.ndarray: A boolean numpy array containing the stacked image slices.
+    """
     V = []
     png_file_list=glob.glob(dir + '/*.png')
     png_file_list.sort()

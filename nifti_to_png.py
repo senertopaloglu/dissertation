@@ -5,6 +5,22 @@ import os
 from PIL import Image
 
 def nifti_to_png(nifti_path: str, output_folder: str, axis: str) -> None:
+    """
+    Convert a NIfTI file into a series of PNG images by slicing along a specified axis.
+
+    This function loads a NIfTI image using nibabel, converts it to its canonical form,
+    normalises the image data to a 0-255 grayscale range, and extracts slices along
+    the specified axis. If the image is an RGB image (4D), the slices are extracted accordingly.
+    Each extracted slice is saved as a PNG image into the output folder.
+
+    Args:
+        nifti_path (str):     path to the input NIfTI file.
+        output_folder (str): Directory where the resultant PNG images will be saved.
+        axis (str): Orientation axis to slice the image (e.g., "axial", "coronal", or "sagittal").
+
+    Returns:
+        None
+    """
     # Load NIfTI image
     img = nib.load(nifti_path)
     img_canonical = nib.as_closest_canonical(img)

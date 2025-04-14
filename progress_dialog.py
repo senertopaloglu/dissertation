@@ -6,6 +6,13 @@ import ttkbootstrap as ttk
 CONTAINER_PREP_ETA = 210  # seconds
 
 class ProgressDialog:
+    """
+    A modal progress dialog for tracking the segmentation process.
+
+    This dialog displays progress bars and labels for various stages including model
+    preparation, frame loading, and segmentation propagation. It also polls a queue for
+    progress updates to reflect changes in real time.
+    """
     def __init__(self, master: tk.Tk, title: str = "Progress"):
         self.top = ttk.Toplevel(master)
         self.top.title(title)
@@ -43,7 +50,12 @@ class ProgressDialog:
         self.max_prop = 0
     
     def update_progress(self) -> None:
-        
+        """
+        Update the progress bars and labels based on the elapsed time and queue updates.
+
+        Returns:
+            None
+        """
         elapsed = time.time() - self.prep_start_time
         if self.current_progress["Preparing model"] < 100:
             computed = min(99, (elapsed / CONTAINER_PREP_ETA) * 99)
@@ -90,4 +102,10 @@ class ProgressDialog:
             self.top.after(100, self.update_progress)
         
     def close(self) -> None:
+        """
+        Close the progress dialog and destroy the progress dialog window.
+
+        Returns:
+            None
+        """
         self.top.destroy()

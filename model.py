@@ -15,6 +15,12 @@ class ImageModel:
     def _load_image(self) -> None:
         """
         Load a 3D image from a file using ITK.
+
+        Initializes an ITK image reader for a 3D image.
+        It reads the image data from the provided filename and stores the output image for further processing.
+
+        Returns:
+            None
         """
         PixelType = itk.ctype("short")
         Dimension = 3
@@ -26,6 +32,17 @@ class ImageModel:
         self.image = reader.GetOutput()
     
     def change_image(self, filename: str) -> None:
+        """
+        Change the currently loaded image.
+
+        This method updates the filename state and reloads the image using the internal ITK reader.
+
+        Args:
+            filename (str): The new image file path.
+
+        Returns:
+            None
+        """
         self.filename = filename
         self._load_image()
 
@@ -36,8 +53,9 @@ class ImageModel:
         Args:
             axis (int): The axis along which to slice (0=axial,1=coronal,2=sagittal).
             slice_index (int): Which slice to extract.
+
         Returns:
-            A 2D NumPy array of the slice.
+            np.ndarray: A 2D NumPy array of the slice.
         """
         size = list(self.image.GetLargestPossibleRegion().GetSize())
         start = list(self.image.GetLargestPossibleRegion().GetIndex())

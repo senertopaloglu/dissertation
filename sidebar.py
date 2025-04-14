@@ -6,6 +6,13 @@ import matplotlib.pyplot as plt
 
 
 class Sidebar(Frame):
+    """
+    A sidebar widget for the application, providing controls for image import/export,
+    segmentation actions, and point management.
+
+    This class builds and configures the sidebar UI components including buttons,
+    checkboxes, tab controls and menus. It also forwards user actions to the controller.
+    """
     def __init__(self, parent: tk.Widget, model, view, controller):
         super().__init__(parent, padding=10)
         self.model = model
@@ -33,6 +40,9 @@ class Sidebar(Frame):
         and various UI elements (like the pointer color option menu, points listbox,
         and undo/redo buttons) for each tab. It also sets up styling and event bindings
         for menu updates and state changes.
+
+        Returns:
+            None
         """
 
         # Tab control and style

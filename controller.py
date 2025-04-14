@@ -26,7 +26,6 @@ from ttkbootstrap.constants import * # colors and styles
 import cv2
 import numpy as np
 
-from view import MainView
 try:
     import nibabel as nib
 except ImportError:
@@ -58,6 +57,14 @@ class SegmentationController:
     def load_image(self, file_path: str, is_nifti: bool = True) -> None:
         """
         Loads the image from the given file path into the model.
+
+        Args:
+            file_path (str): The path to the image file that needs to be loaded.
+            is_nifti (bool, optional): Indicates whether the file is in NIfTI format.
+                If False, the file will be converted from DICOM to NIfTI. Defaults to True.
+
+        Returns:
+            None
         """
         if not is_nifti:
             file_path = DicomToNifti().convert(file_path, f"{os.path.split(file_path)[-1]}.nii")
@@ -71,14 +78,29 @@ class SegmentationController:
     def handle_slice_request(self, axis: int, slice_index: int):
         """
         Called by the View whenever a slider is moved to change slices.
-        We simply go to the Model, get the requested slice, and hand it back.
+        Retrieves the requested slice from the model based on the given axis and slice index.
+        
+        Args:
+            axis (int): The axis number from which to retrieve the slice.
+            slice_index (int): The index of the slice for the specified axis.
+
+        Returns:
+            np.ndarray: The image slice corresponding to the axis and slice index.
         """
         return self.model.get_slice(axis, slice_index)
 
     def on_click(self, event: MouseEvent, pointer_color: str, ax: Axes) -> None:
         """
         Callback for mouse clicks on the matplotlib canvas.
-        This is where we record the point location and update the view.
+        Records the point location and updates the view.
+
+        Args:
+            event (MouseEvent): The mouse event containing click coordinates and context.
+            pointer_color (str): The color for the pointer click.
+            ax (Axes): The matplotlib Axes instance where the click occurred.
+
+        Returns:
+            None
         """
         if event.inaxes is None:
             return  # ignore clicks outside the axes
@@ -126,7 +148,13 @@ class SegmentationController:
 
     def undo(self, is_draft: bool) -> None:
         """
-        Undo the last point addition.
+        Undo the last point addition in the active tab.
+
+        Args:
+            is_draft (bool): True if undoing a draft point; False for a final point.
+
+        Returns:
+            None
         """
         active_index = self.view.sidebar.tabControl.index("current")
         current_tab = self.view.sidebar.tabs[active_index]
@@ -165,7 +193,13 @@ class SegmentationController:
 
     def redo(self, is_draft: bool) -> None:
         """
-        Redo the last undone point addition.
+        Redo the last undone point addition in the active tab.
+
+        Args:
+            is_draft (bool): True if redoing a draft point; False for a final point.
+
+        Returns:
+            None
         """
         active_index = self.view.sidebar.tabControl.index("current")
         current_tab = self.view.sidebar.tabs[active_index]
@@ -209,7 +243,16 @@ class SegmentationController:
         self.view._update_slice(ax, canvas, axis, slice_idx)
     
     def refresh_selection_state(self) -> None:
-        # Iterate over all tabs and reset their state.
+        """
+        Resets the selection state for all tabs.
+
+        Clears both the draft and final points listboxes, removes any drawn line objects from the canvas,
+        resets the corresponding points lists and undo/redo stacks for each tab, and disables the positive click
+        checkboxes. Also disables the "show-points" checkboxes in each view if no points remain.
+
+        Returns:
+            None
+        """
         for tab in self.view.sidebar.tabs:
             # Clear the draft listbox
             if tab.draft_points_listbox:
@@ -267,7 +310,34 @@ class SegmentationController:
         is_global: bool = False
     ) -> None:
         """
-        Calls the model to segment the image based on the user's clicks.
+        Prepares the necessary filenames and local folders, converts the input NIfTI image
+        to JPG (with optional downsampling), and then invokes the segmentation process with progress 
+        reporting. In remote mode, it handles the file transfers using Modal commands. Finally, it calls 
+        the segmentation process wrapped in a progress dialog.
+
+        Args:
+            slices (np.ndarray): A numpy array representing the image volume slices.
+            points (Points): A collection of user-selected points for segmentation.
+            frame_idx (int): Index of the current frame/slice to segment.
+            axis_str_suffix (str): A string representing the axis (e.g., "AXIAL", "CORONAL", or "SAGITTAL")
+                used for file naming and processing.
+            custom_filename (Optional[str], optional): A custom filename prefix. If provided, it is used to
+                derive the folder name. Defaults to None.
+            completion_callback (Optional[Callable[[Any], None]], optional): A callback function that is invoked
+                upon segmentation completion. Defaults to None.
+            downsampled (bool, optional): Flag specifying if segmentation should be performed on a downsampled image.
+                Defaults to False.
+            multi_resolution (bool, optional): If True, enables multi-resolution segmentation. Defaults to False.
+            is_first (bool, optional): Indicates if this is the first iteration in a multi-resolution segmentation.
+                Defaults to False.
+            is_final (bool, optional): Indicates if this is the final iteration in a multi-resolution segmentation.
+                Defaults to False.
+            progress_title (Optional[str], optional): Title for the progress dialog. Defaults to None.
+            is_global (bool, optional): If True, segmentation is performed globally across multiple views.
+                Defaults to False.
+
+        Returns:
+            None
         """
         # get filename (without prefix and file format)
         filename = custom_filename if custom_filename is not None else self.model.filename
@@ -318,6 +388,36 @@ class SegmentationController:
         progress_title: Optional[str] = None,
         is_global: bool = False
     ) -> None:
+        """
+        Runs the segmentation process while displaying a progress dialog.
+
+        This method creates and displays a progress dialog, then starts the segmentation process in a 
+        separate thread. It redirects stdout to capture progress updates and handles both local and remote 
+        segmentation. Upon completion, it cleans up temporary files and invokes the provided completion callback,
+        or updates the view with the segmentation result.
+
+        Args:
+            slices (np.ndarray): A numpy array representing the image volume slices.
+            points (Points): A collection of user-selected points for segmentation.
+            frame_idx (int): Index of the current frame/slice to segment.
+            axis_str_suffix (str): A string representing the axis (e.g., "AXIAL", "CORONAL", or "SAGITTAL")
+                used for file naming and processing.
+            foldername (str): The name of the folder where the intermediate JPG images are stored.
+            completion_callback (Optional[Callable[[Any], None]], optional): A callback function invoked upon 
+                segmentation completion. Defaults to None.
+            multi_resolution (bool, optional): Flag indicating if multi-resolution segmentation is enabled.
+                Defaults to False.
+            is_first (bool, optional): Indicates if this is the first iteration in a multi-resolution segmentation.
+                Defaults to False.
+            is_final (bool, optional): Indicates if this is the final iteration in a multi-resolution segmentation.
+                Defaults to False.
+            progress_title (Optional[str], optional): Title for the progress dialog. Defaults to None.
+            is_global (bool, optional): If True, segmentation is performed globally across multiple views.
+                Defaults to False.
+
+        Returns:
+            None
+        """
         # create progress dialog as a child of the main view
         progress_dialog = ProgressDialog(self.view, title=progress_title if progress_title is not None else "Progress")
         progress_dialog.top.transient(self.view)
@@ -363,6 +463,25 @@ class SegmentationController:
     
     # multiresolution segmentation routine
     def multiresolution_segmentation(self, tab: int) -> None:
+        """
+        Performs multi-resolution segmentation on the image for a specific view.
+
+        This method retrieves the original image and its corresponding slice based on the active tab.
+        It then downsamples the image volume iteratively and performs segmentation at each resolution.
+        Segmentation masks from the lower resolution are used to compute new seeds for further iterations.
+        Debug figures may be displayed for verification of the downsampled masks and recomputed seed points.
+
+        Args:
+            tab (int): The index of the tab on which segmentation is performed (0 for axial, 1 for coronal,
+                2 for sagittal).
+
+        Returns:
+            None
+
+        Raises:
+            tk.messagebox.showerror: If no image is loaded or if the image dimensions are too small for the 
+                desired downsampling resolution.
+        """
         if self.model.image is None:
             messagebox.showerror("Error", "No image loaded.")
             return
@@ -651,6 +770,13 @@ class SegmentationController:
         If a draft point has the same color as an existing final point,
         it overwrites that final point. Afterwards, resets draft points,
         listbox, undo/redo stacks and draft line objects.
+        
+        Args:
+            active_index (int, optional): The index of the active tab to merge. If None, the currently 
+                selected tab is used. Defaults to None.
+
+        Returns:
+            None
         """
         if active_index is None:
             active_index = self.view.sidebar.tabControl.index("current")
@@ -755,7 +881,13 @@ class SegmentationController:
     
     def merge_all_drafts(self) -> None:
         """
-        Calls merge_drafts on every view to merge all draft points, masks and meshes.
+        Merges draft points, segmentation masks, and mesh results across all views.
+
+        This method iterates over all tabs (Axial, Coronal, and Sagittal), calling merge_drafts for each tab 
+        to consolidate draft data into the final segmentation results.
+
+        Returns:
+            None
         """
         # Merge draft points from all tabs into regular points
         for idx in [0,1,2]:

@@ -5,7 +5,24 @@ import os
 from PIL import Image
 
 def nifti_to_jpg(nifti_path: str, output_folder: str, axis: str, downsampled: bool = False) -> None:
-    # Load NIfTI image
+    """
+    Convert a NIfTI file into a series of JPG images by slicing along a specified axis.
+
+    This function loads a NIfTI image using nibabel, converts it to its canonical form, normalizes
+    the data to a 0-255 grayscale range, and then extracts slices along the given axis. Depending on the
+    parameters provided, the slicing axis may be adjusted (or the slice order reversed). Each extracted
+    slice is saved as a JPG image into the output folder.
+
+    Args:
+        nifti_path (str): Path to the input NIfTI file.
+        output_folder (str): Directory where the resultant JPG images will be saved.
+        axis (str): Orientation axis to slice the image (e.g., "axial", "coronal", or "sagittal").
+        downsampled (bool, optional): If True, forces slicing along axis 0 assuming the data is downsampled.
+            Defaults to False.
+
+    Returns:
+        None
+    """
     img = nib.load(nifti_path)
     img_canonical = nib.as_closest_canonical(img)
     data = img_canonical.get_fdata()
