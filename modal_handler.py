@@ -134,8 +134,6 @@ def do_some_magic(
                     ann_frame_idx = min(ann_frame_idx, f_index)
                 points.extend([[x[0], x[1]] for x in v])
                 labels.extend([x[2] for x in v])
-                print(points)
-                print(labels)
                 points_np = np.array(points, dtype=np.float32)
                 labels_np = np.array(labels, np.int32)
                 prompts[ann_obj_id] = points_np, labels_np
@@ -163,7 +161,6 @@ def do_some_magic(
     if is_final:
         # run propagation throughout the video and collect the results in a dict
         # prop forwards
-        print(ann_frame_idx)
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx):
             video_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()

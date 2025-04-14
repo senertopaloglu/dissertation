@@ -609,7 +609,7 @@ class SegmentationController:
                 return
             
             downsampled_volume = downsample_volume(resolution)
-            print("*", downsampled_volume.shape)
+
             points = seeds
 
             filename_without_extension = os.path.splitext(os.path.basename(self.model.filename))[0]
@@ -617,7 +617,6 @@ class SegmentationController:
             temp_filename = f"downsampled_{filename_without_extension}_{resolution}"
             os.makedirs("./temp", exist_ok=True)
             nii_img = nib.Nifti1Image(downsampled_volume, affine=np.eye(4))
-            print("**", nii_img.header.get_data_shape())
             nib.save(nii_img, f"./temp/{temp_filename}_{axis_str_suffix}.nii")
 
             # Completion callback to capture segmentation result.
@@ -648,7 +647,6 @@ class SegmentationController:
                 nonlocal most_recent_video_segments
                 if 'video_segments' in result_container:
                     video_segments = result_container['video_segments']
-                    print(f"resolution: {resolution}")
                     most_recent_video_segments = result_container['video_segments']
                     
                     os.remove(f"./temp/{temp_filename}_{axis_str_suffix}.nii")
