@@ -171,13 +171,13 @@ class Sidebar(Frame):
             pointer_color_var = ttk.StringVar(value="Red")
             tab.pointer_color_var = pointer_color_var
 
-            pos_click_var = ttk.BooleanVar(value=True)
-            tab.pos_click_var = pos_click_var
-            pos_click_checkbox = Checkbutton(content_frame, text="Positive Click", variable=pos_click_var, style="StandardFont.TCheckbutton")
+            positive_click_var = ttk.BooleanVar(value=True)
+            tab.positive_click_var = positive_click_var
+            positive_click_checkbox = Checkbutton(content_frame, text="Positive Click", variable=positive_click_var, style="StandardFont.TCheckbutton")
             if not self.model.image:
-                pos_click_checkbox.config(state="disabled")
-            pos_click_checkbox.pack(pady=(2, 0))
-            tab.pos_click_checkbox = pos_click_checkbox
+                positive_click_checkbox.config(state="disabled")
+            positive_click_checkbox.pack(pady=(2, 0))
+            tab.positive_click_checkbox = positive_click_checkbox
 
             pointer_frame = Frame(content_frame)
             pointer_frame.pack(fill="x", pady=(2, 2))
@@ -211,10 +211,10 @@ class Sidebar(Frame):
                 current_tab.pointer_color_optionmenu.configure(style=current_tab.style_name)
                 points_for_color = [pt for pt in current_tab.points if pt[2].lower() == selected]
                 if points_for_color:
-                    current_tab.pos_click_checkbox.config(state="normal")
+                    current_tab.positive_click_checkbox.config(state="normal")
                 else:
-                    current_tab.pos_click_var.set(True)
-                    current_tab.pos_click_checkbox.config(state="disabled")
+                    current_tab.positive_click_var.set(True)
+                    current_tab.positive_click_checkbox.config(state="disabled")
             pointer_color_var.trace_add("write", update_option_menu_color)
             update_option_menu_color()
 

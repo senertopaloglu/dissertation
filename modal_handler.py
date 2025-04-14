@@ -38,7 +38,7 @@ app = modal.App("adapted-example-3")
 
 
 @app.function(gpu="L4", image=image, volumes={"/root/temp":vol}, timeout=1000, mounts=[])
-def do_some_magic(
+def run_segmentation(
     points_np: Points,
     frame_idx: int,
     foldername: str,
@@ -113,7 +113,7 @@ def do_some_magic(
     predictor.reset_state(inference_state)
 
 
-    video_segments = {}  # video_segments contains the per-frame segmentation results
+    volume_segments = {}  # volume_segments contains the per-frame segmentation results
 
     prompts = {}  # hold all the clicks we add for visualization
 
@@ -162,19 +162,19 @@ def do_some_magic(
         # run propagation throughout the video and collect the results in a dict
         # prop forwards
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx):
-            video_segments[out_frame_idx] = {
+            volume_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
             }
         # prop backwards
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx-1, reverse=True):
-            video_segments[out_frame_idx] = {
+            volume_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
             }
     else:
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx, max_frame_num_to_track=0):
-            video_segments[out_frame_idx] = {
+            volume_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
             }
@@ -182,7 +182,7 @@ def do_some_magic(
     if "VIRTUAL_ENV" in os.environ:
         del os.environ["VIRTUAL_ENV"]
 
-    return video_segments
+    return volume_segments
 
 def segment(
     slices: np.ndarray,
@@ -198,7 +198,7 @@ def segment(
     Invoke remote segmentation on video frames using provided annotation points.
 
     This function is a wrapper that forwards the segmentation task to the 
-    remote function 'do_some_magic' via Modal (modal.com). The actual segmentation logic 
+    remote function 'run_segmentation' via Modal (modal.com). The actual segmentation logic 
     is executed remotely, and results are returned as a dictionary mapping frame 
     indices to segmentation mask results.
 
@@ -212,9 +212,9 @@ def segment(
         is_final: Boolean flag indicating if this is the final segmentation (which triggers full video propagation).
 
     Returns:
-        video_segments: A dictionary mapping frame indices to segmentation mask results.
+        volume_segments: A dictionary mapping frame indices to segmentation mask results.
     """
     with modal.enable_output():
         with app.run():
-            video_segments=do_some_magic.remote(points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
-    return video_segments
+            volume_segments=run_segmentation.remote(points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
+    return volume_segments

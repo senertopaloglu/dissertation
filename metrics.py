@@ -12,7 +12,7 @@ def DICE(Vref: np.ndarray, Vseg: np.ndarray) -> float:
     Compute the Dice Similarity Coefficient between two binary volumes.
 
     The Dice coefficient is calculated as:
-      DICE = 2 * (|Vref ∩ Vseg|) / (|Vref| + |Vseg|)
+      DICE = 2 * (size(Vref n Vseg)) / (size(Vref) + size(Vseg))
 
     Args:
         Vref (np.ndarray): The ground truth binary volume.

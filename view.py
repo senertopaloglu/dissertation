@@ -8,8 +8,8 @@ from matplotlib.lines import Line2D
 
 from type_aliases import SegmentationResult
 from export_format import ExportFormat
-from model import ImageModel
 from sidebar import Sidebar
+from frame_builder import create_image_frame, create_mesh_view_frame
 
 import tkinter as tk
 import ttkbootstrap as ttk
@@ -20,7 +20,6 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import trimesh
 import scipy.ndimage as ndimage
@@ -34,9 +33,6 @@ try:
 except ImportError:
     nib = None
 
-class CustomNavigationToolbar2Tk(NavigationToolbar2Tk):
-    # Remove the 'Save' tool from the toolbar
-    toolitems = [item for item in NavigationToolbar2Tk.toolitems if item[0] != 'Save']
 
 class MainView(Window):
     """
@@ -110,10 +106,10 @@ class MainView(Window):
         self.draft_coronal_view_mask = None
         self.draft_sagittal_view_mask = None
         
-        self.axial_view = self._create_image_frame("Axial View", axis=0)
-        self.coronal_view = self._create_image_frame("Coronal View", axis=1)
-        self.sagittal_view = self._create_image_frame("Sagittal View", axis=2)
-        self.mesh_view = self._create_mesh_view_frame("Segmentation Result (3D Mesh View)")
+        self.axial_view = create_image_frame(self, "Axial View", axis=0)
+        self.coronal_view = create_image_frame(self, "Coronal View", axis=1)
+        self.sagittal_view = create_image_frame(self, "Sagittal View", axis=2)
+        self.mesh_view = create_mesh_view_frame(self, "Segmentation Result (3D Mesh View)")
 
         # Attach these views to the grid
         self.axial_view.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
@@ -151,178 +147,7 @@ class MainView(Window):
         h, w = mask.shape[-2:]
         mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
         ax.imshow(mask_image)
-
-    def _create_title_frame(self, parent: ttk.Frame, text: str) -> ttk.Frame:
-        """
-        Create a composite title widget with a left label for the draft prefix (initially empty)
-        and a right label for the view title (e.g. "Axial View").
-        
-        Args:
-            parent (ttk.Frame): The parent frame that will contain this title frame.
-            text (str): The view title to be displayed (e.g., "Axial View").
-
-        Returns:
-            ttk.Frame: The created title frame with draft and view labels.
-        """
-        title_frame = ttk.Frame(parent)
-
-        # Label for "[DRAFT] " (bold)
-        draft_text = "[DRAFT] " if self.sidebar.global_draft_mode.get() else ""
-        draft_label = ttk.Label(title_frame, text=draft_text, font=("TkDefaultFont", 13, "bold"))
-        draft_label.grid(row=0, column=0, sticky="e")
-        
-        # Label for the view name (normal)
-        view_label = ttk.Label(title_frame, text=text, font=("TkDefaultFont", 13))
-        view_label.grid(row=0, column=1, sticky="w")
-
-        title_frame.columnconfigure(0, weight=1)
-        title_frame.columnconfigure(1, weight=1)
-
-        # Store references for later updates
-        title_frame.draft_label = draft_label
-        title_frame.view_label = view_label
-        return title_frame
-
-    def _create_image_frame(self, text: str, axis: int) -> Frame:
-        """
-        Creates a labeled frame containing a Matplotlib FigureCanvas along with a slider 
-        and checkboxes to control the display of segmentation masks and points.
-
-        Args:
-            text (str): The title text to be displayed on the frame.
-            axis (int): The image axis associated with the frame.
-
-        Returns:
-            Frame: A configured Tkinter frame embedding the Matplotlib FigureCanvas and control widgets.
-        """
-        outer_frame = Frame(self, relief="solid", borderwidth=1)
-        
-        content_frame = Frame(outer_frame)
-        content_frame.pack(fill="both", expand=True, padx=5, pady=5)
-
-        title_frame = self._create_title_frame(content_frame, text)
-        title_frame.pack(side="top", fill="x", pady=(5,0))
-        outer_frame.title_frame = title_frame
-
-        control_frame = Frame(content_frame)
-        control_frame.pack(side="top", fill="x", pady=5)
-
-        fig = Figure(figsize=(4,4))
-        ax = fig.add_subplot(111)
-        canvas = FigureCanvasTkAgg(fig, master=content_frame)
-        canvas.tab_index = axis
-        widget = canvas.get_tk_widget()
-        canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
-
-        toolbar = CustomNavigationToolbar2Tk(canvas, control_frame)
-        toolbar.update()
-        toolbar.pack(side="bottom", fill="x")
-        canvas.toolbar = toolbar
-
-        outer_frame.canvas = canvas
-        canvas.axis = axis
-        outer_frame.canvas_ax=ax
-
-        # Connect click events
-        fig.canvas.mpl_connect(
-            'button_press_event',
-            lambda event: self._on_click(event, ax, canvas)
-        )
-
-        if self.model.image:
-            sizes = self.model.image.GetLargestPossibleRegion().GetSize()
-            dim = 2 if axis == 0 else 1 if axis == 1 else 0
-            max_slice = sizes[dim] - 1
-
-            # initialise show/hide mask and show/hide points vars before slider.set
-            show_mask_var = ttk.BooleanVar()
-            canvas.show_mask_var = show_mask_var
-
-            show_points_var = ttk.BooleanVar(value=True)
-            canvas.show_points_var = show_points_var
-
-            # Slider to navigate slices
-            slider = Scale(
-                control_frame, 
-                from_=0, 
-                to=max_slice, 
-                orient="horizontal",
-                command=lambda val: self._update_slice(ax, canvas, axis, val)
-            )
-            slider.pack(side="top", fill="x", expand=True)
-            
-            initial_slice = max_slice // 2
-            slider.set(initial_slice)
-
-            # checkbox to show/hide segmentation mask, show_mask_var is auto updated on click
-            show_mask_checkbox = Checkbutton(
-                control_frame,
-                text="Show Segmentation Masks",
-                variable=show_mask_var,
-                command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get())) # need to re-render image (either with or without mask depending on canvas.show_mask_var)
-            )
-            show_mask_checkbox.pack(side="top", anchor="center", pady=5)
-
-            mask = self._get_mask(axis)
-            if mask is None:
-                show_mask_checkbox.config(state="disabled")
-
-            canvas.show_mask_checkbox = show_mask_checkbox
-
-            # checkbox to show/hide points
-            show_points_checkbox = Checkbutton(
-                control_frame,
-                text="Show Points",
-                variable=show_points_var,
-                command=lambda: self._update_slice(ax, canvas, axis, int(canvas.slider.get()))
-            )
-            show_points_checkbox.pack(side="top", anchor="center", pady=(3,2))
-            # initially disable the checkbox because there are no points to show yet
-            show_points_checkbox.config(state="disabled")
-            canvas.show_points_checkbox = show_points_checkbox
-            
-            # initialize the slice display
-            self._update_slice(ax, canvas, axis, initial_slice)
-
-            canvas.slider = slider
-
-        return outer_frame
     
-    def _create_mesh_view_frame(self, text: str) -> Frame:
-        """
-        Creates and returns a dedicated frame for the 3D mesh view.
-
-        This frame is used to display the 3D segmentation mesh. It contains a label
-        for descriptive text and an embedded Matplotlib FigureCanvasTkAgg to render
-        the 3D plot. Click events are ignored in this view since it is not meant 
-        for interactive segmentation.
-
-        Args:
-            text (str): The title text to be displayed on the mesh view frame.
-
-        Returns:
-            Frame: A configured Tkinter frame with an embedded Matplotlib canvas.
-        """
-        outer_frame = Frame(self, relief="solid", borderwidth=1)
-
-        content_frame = Frame(outer_frame)
-        content_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        title_frame = self._create_title_frame(content_frame, text)
-        title_frame.pack(side="top", fill="x", pady=(5,0))
-        outer_frame.title_frame = title_frame  # store for later updates
-
-        fig = Figure(figsize=(4,4))
-        ax = fig.add_subplot(111, projection='3d')
-        canvas = FigureCanvasTkAgg(fig, master=content_frame)
-        canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
-        
-        outer_frame.canvas = canvas
-        outer_frame.canvas_ax = ax
-
-        return outer_frame
-
-
     def _update_slice(self, ax: Axes, canvas: FigureCanvasTkAgg, axis: int, val: Union[int, str]) -> None:
         """
         Update the displayed slice in the given axis whenever the slider changes.
@@ -941,206 +766,17 @@ class MainView(Window):
         Uses the latest segmentation
         to recompute the mesh using an optimised marching cubes approach.
         """
-        try:
-            from stl import mesh
-        except ImportError:
-            tk.messagebox.showerror("Export Error", "The 'numpy-stl' package is required for exporting 3D meshes.")
-            return
-    
-        # ensure segmentation has been run, else, 3d segmentation mesh will not exist
-        if self.sidebar.global_draft_mode.get():
-            if not self.last_draft_result:
-                tk.messagebox.showerror("Export Error", "No segmentation result available for export.")
-                return
-            else:
-                video_segments = self.last_draft_result
-        else:
-            if not self.last_result:
-                tk.messagebox.showerror("Export Error", "No segmentation result available for export.")
-                return
-            else:
-                video_segments = self.last_result
+        if self.controller:
+            self.controller.export_3d_mesh()
         
-        stl_meshes = []
-        for obj_id, (verts, faces) in video_segments.items():
-            triangles = verts[faces] # shape: (n_faces, 3, 3)
-            m = mesh.Mesh(np.zeros(triangles.shape[0], dtype=mesh.Mesh.dtype))
-            for i, triangle in enumerate(triangles):
-                m.vectors[i] = triangle
-            stl_meshes.append(m)
-        
-        if not stl_meshes:
-            tk.messagebox.showerror("Export Error", "No valid mesh could be generated.")
-            return
-
-        # combine all mesh data into one STL
-        combined_data = np.concatenate([m.data for m in stl_meshes])
-        exported_mesh = mesh.Mesh(combined_data.copy())
-
-        export_filename = tk.filedialog.asksaveasfilename(
-            title="Export 3D Mesh as STL",
-            filetypes=[("STL files", "*.stl"), ("All files", "*.*")],
-            defaultextension=".stl"
-        )
-        if not export_filename:
-            return
-        
-        exported_mesh.save(export_filename)
-        tk.messagebox.showinfo("Export Successful", f"3D mesh exported as '{export_filename}'.")
-
     def _export_view_with_mask(self) -> None:
         """
         Exports the original image with overlayed segmentation mask in the active view
         as a 3D NIfTI file.
         Presents a popup using radio buttons (with an Enum) for user export format selection.
         """
-        popup = tk.Toplevel(self)
-        popup.title("Choose Export Color Format")
-        popup.transient(self)
-
-        instruction_label = tk.Label(popup, text="Select export format for the exported view:")
-        instruction_label.pack(pady=10)
-
-        export_var = tk.StringVar(value=ExportFormat.BINARY.value)
-
-        # Create a radio button for each enum option.
-        for fmt in ExportFormat:
-            rb = ttk.Radiobutton(popup, text=str(fmt), variable=export_var, value=fmt.value)
-            rb.pack(anchor="w", padx=20)
-
-        def on_confirm():
-            # Convert the selected value to an enum instance.
-            chosen_format = ExportFormat(export_var.get())
-            popup.destroy()
-            self._export_view_with_mask_process(chosen_format)
-            
-        confirm_button = ttk.Button(popup, text="OK", command=on_confirm, bootstyle="info")
-        confirm_button.pack(pady=10)
-        
-    def _export_view_with_mask_process(self, chosen_format: ExportFormat) -> None:
-        """
-        Carries out the export process using the chosen format:
-          - BINARY: Convert composite volume to binary image.
-          - GRAYSCALE: Convert composite volume to a weighted grayscale image.
-          - RGB: Overlay each segmentation mask on the original image in RGB format.
-        """
-        alpha = 0.4
-
-        original_np = np.asarray(self.model.image)
-
-        active_index = self.sidebar.tabControl.index("current")
-        axis = active_index
-        current_tab = self.sidebar.tabs[active_index]
-
-        num_slices = original_np.shape[axis]
-
-        if self.sidebar.global_draft_mode.get():
-            mask_dict = self._get_mask(axis, is_draft=True)
-        else:
-            mask_dict = self._get_mask(axis)
-
-        if mask_dict is None:
-            tk.messagebox.showerror("Export Error", "No segmentation mask available for selected view.")
-            return
-
-        composite_slices = []
-
-        grayscale_mapping = {1: 63, 2: 252, 3: 189, 4: 126, 5: 111, 6: 96, 7: 71, 8: 56, 9: 41, 10: 26}
-
-        for i in range(num_slices):
-            # get the correct original slice for the orientation.
-            if active_index == 0:
-                # axial view: slices along axis 0
-                orig_slice = original_np[i, :, :]
-            elif active_index == 1:
-                # coronal view: slices along axis 1
-                orig_slice = original_np[:, i, :]
-            elif active_index == 2:
-                # sagittal view: slices along axis 2
-                orig_slice = original_np[:, :, i]
-                orig_slice = np.rot90(orig_slice, k=-1)
-                orig_slice = np.fliplr(orig_slice)
-
-            # normalise original slice to 0-255
-            slice_min, slice_max = orig_slice.min(), orig_slice.max()
-            if slice_max > slice_min:  # to avoid divide-by-zero
-                norm_slice = (orig_slice - slice_min) / (slice_max - slice_min)
-            else:
-                norm_slice = orig_slice * 0  # all zeros if it's a uniform slice
-            norm_slice_255 = (norm_slice * 255).astype(np.uint8)
-
-            # convert grayscale to RGB
-            rgb = np.stack([norm_slice_255] * 3, axis=-1).astype(np.float32)
-            
-            # if binary or grayscale; start with a black canvas
-            if chosen_format == ExportFormat.BINARY or chosen_format == ExportFormat.GRAYSCALE:
-                composite = np.zeros_like(rgb)
-            else: # start with original rgb image
-                composite = rgb.copy()
-
-            # if a segmentation mask exists for this slice, overlay each object. 
-            if i in mask_dict:
-                for obj_id, mask in sorted(mask_dict[i].items(), key=lambda item: item[0]):
-                    if active_index == 2:
-                        mask = np.squeeze(mask.astype(np.float32))
-                        mask = np.rot90(mask, k=-1)
-                        mask = np.fliplr(mask)
-                        mask_expanded = mask[..., np.newaxis] # expand *exactly one* axis for alpha blending
-                    else:
-                        mask_expanded = np.expand_dims(mask.astype(np.float32), axis=-1)
-
-                    if chosen_format == ExportFormat.BINARY:
-                        binary_mask = (mask_expanded > 0).squeeze()
-                        composite[binary_mask] = 255  # Set the mask area to white
-                    elif chosen_format == ExportFormat.GRAYSCALE:
-                        gray_val = grayscale_mapping.get(obj_id, 0)
-                        overlay = np.full_like(composite, gray_val)
-                        # only update pixels where mask is active without affecting other overlays
-                        composite = np.where(mask_expanded > 0, (1-alpha) * composite + alpha * overlay, composite)
-                    else:
-                        colour_name = self.pointer_color_mapping.get(obj_id, "red")
-                        colour_rgb = np.array(mcolors.to_rgb(colour_name)) * 255
-                        overlay = np.full_like(composite, colour_rgb)
-                        # blend overlay with original image using alpha
-                        composite = np.where(mask_expanded > 0, (1 - alpha) * composite + alpha * overlay, composite)
-                    
-                if chosen_format != ExportFormat.BINARY:
-                    composite = np.clip(composite, 0, 255)
-            
-            if composite.ndim == 4 and composite.shape[0] == 1:
-                composite = np.squeeze(composite, axis=0)
-            
-            composite_slices.append(composite.astype(np.uint8))
-        
-        composite_volume = np.stack(composite_slices, axis=0)  # shape: (num_slices, H, W, 3)
-
-        # Sometimes an extra singleton dimension appears as axis 1; if so, squeeze it:
-        if composite_volume.ndim == 5 and composite_volume.shape[1] == 1:
-            composite_volume = np.squeeze(composite_volume, axis=1)
-        
-        # reorient volume
-        if active_index == 1: # coronal
-            composite_volume = composite_volume.transpose(1, 0, 2, 3)
-        if active_index == 2: # sagittal
-            composite_volume = composite_volume.transpose(2, 1, 0, 3)
-
-        if nib is None:
-            tk.messagebox.showerror("Export Error", "The 'nibabel' package is required for exporting 3D NIfTI files.")
-            return
-
-        # Open file dialog for user to choose save location.
-        export_filename = tk.filedialog.asksaveasfilename(
-            title="Export 3D Image with Segmentation Overlay as NIfTI",
-            defaultextension=".nii",
-            filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")]
-        )
-        if not export_filename:
-            return
-
-        # Create a NIfTI image and save
-        nii_img = nib.Nifti1Image(composite_volume, affine=np.eye(4))
-        nib.save(nii_img, export_filename)
-        tk.messagebox.showinfo("Export Successful", f"Image with segmentation overlay exported as:\n{export_filename}")
+        if self.controller:
+            self.controller.export_view_with_mask()
     
     def _get_canvas(self, axis: int) -> FigureCanvasTkAgg:
         """

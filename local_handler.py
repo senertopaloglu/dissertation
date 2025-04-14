@@ -27,7 +27,7 @@ def run_segmentation(
         is_final: Boolean flag indicating if this is the final segmentation (which triggers full video propagation).
 
     Returns:
-        video_segments: A dictionary mapping frame indices to segmentation mask results.
+        volume_segments: A dictionary mapping frame indices to segmentation mask results.
     """
     torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
     if torch.cuda.get_device_properties(0).major >= 8:
@@ -51,7 +51,7 @@ def run_segmentation(
     inference_state = predictor.init_state(video_path=video_dir)
     predictor.reset_state(inference_state)
 
-    video_segments = {}  # video_segments contains the per-frame segmentation results
+    volume_segments = {}  # volume_segments contains the per-frame segmentation results
 
     prompts = {}  # hold all the clicks we add for visualization
 
@@ -76,24 +76,24 @@ def run_segmentation(
         # run propagation throughout the video and collect the results in a dict
         # prop forwards
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
-            video_segments[out_frame_idx] = {
+            volume_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
             }
         # prop backwards
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx-1, reverse=True):
-            video_segments[out_frame_idx] = {
+            volume_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
             }
     else:
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx, max_frame_num_to_track=0):
-            video_segments[out_frame_idx] = {
+            volume_segments[out_frame_idx] = {
                 out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
                 for i, out_obj_id in enumerate(out_obj_ids)
             }
     
-    return video_segments
+    return volume_segments
 
 def segment(
     slices: np.ndarray,
@@ -119,9 +119,9 @@ def segment(
         is_final: Boolean flag indicating if this is the final segmentation (which triggers full video propagation).
 
     Returns:
-        video_segments: A dictionary mapping frame indices to segmentation mask results.
+        volume_segments: A dictionary mapping frame indices to segmentation mask results.
     """
-    video_segments = run_segmentation(
+    volume_segments = run_segmentation(
         points,
         frame_idx,
         foldername,
@@ -129,4 +129,4 @@ def segment(
         is_first,
         is_final
     )
-    return video_segments
+    return volume_segments

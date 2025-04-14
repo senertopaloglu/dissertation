@@ -26,6 +26,8 @@ from ttkbootstrap.constants import * # colors and styles
 import cv2
 import numpy as np
 
+from exporter import Exporter
+
 try:
     import nibabel as nib
 except ImportError:
@@ -36,12 +38,21 @@ class SegmentationController:
     """
     The Controller in our MVC. Knows about the Model (ImageModel) and the View,
     and coordinates the logic between them (point selection, undo, redo, etc.).
+
+    Attributes:
+        model (ImageModel): The image model responsible for loading and storing the image.
+        view (MainView): The view that displays the GUI and manages user interactions.
+        points (list): List of final segmentation points.
+        line_objects (list): List of line objects drawn on the canvas representing selected points.
+        undo_stack (list): Stack to keep track of operations for undo functionality.
+        redo_stack (list): Stack to keep track of operations for redo functionality.
     """
     def __init__(self, model, view):
         self.model = model
         self.view = view
 
-        # Store the points, line objects, and stacks for undo/redo
+        self.exporter = Exporter(self.view)
+
         self.points = []
         self.line_objects = []
         self.undo_stack = []
@@ -117,10 +128,10 @@ class SegmentationController:
             active_index = self.view.sidebar.tabControl.index("current")
             current_tab = self.view.sidebar.tabs[active_index]
 
-        pos_flag = 1 if current_tab.pos_click_var.get() else 0
+        pos_flag = 1 if current_tab.positive_click_var.get() else 0
 
-        if current_tab.pos_click_checkbox["state"] == "disabled":
-            current_tab.pos_click_checkbox["state"] = "normal"
+        if current_tab.positive_click_checkbox["state"] == "disabled":
+            current_tab.positive_click_checkbox["state"] = "normal"
         
         if self.view.sidebar.global_draft_mode.get():
             # If in draft mode, do not add the point to the points list.
@@ -138,13 +149,13 @@ class SegmentationController:
         line = self.view.plot_point(x, y, color, ax)
         current_tab.line_objects.append(line)
 
-        # update the state of the pos_click_checkbox based on points for the current color.
-        points_for_color = [pt for pt in current_tab.points if pt[2].lower() == color]
-        if points_for_color:
-            current_tab.pos_click_checkbox.config(state="normal")
+        # update the state of the positive_click_checkbox based on points for the current color.
+        points_current_color = [pt for pt in current_tab.points if pt[2].lower() == color]
+        if points_current_color:
+            current_tab.positive_click_checkbox.config(state="normal")
         else:
-            current_tab.pos_click_var.set(True)
-            current_tab.pos_click_checkbox.config(state="disabled")
+            current_tab.positive_click_var.set(True)
+            current_tab.positive_click_checkbox.config(state="disabled")
 
     def undo(self, is_draft: bool) -> None:
         """
@@ -283,8 +294,8 @@ class SegmentationController:
             tab.undo_stack = []
             tab.draft_redo_stack = []
             tab.redo_stack = []
-            if hasattr(tab, "pos_click_checkbox"):
-                tab.pos_click_checkbox.config(state = "disabled")
+            if hasattr(tab, "positive_click_checkbox"):
+                tab.positive_click_checkbox.config(state = "disabled")
 
         # disable the show-points checkbox in each view if no points remain
         if hasattr(self.view, "axial_view") and hasattr(self.view.axial_view.canvas, "show_points_checkbox"):
@@ -431,12 +442,12 @@ class SegmentationController:
                 with contextlib.redirect_stdout(capture):
                     if self.is_remote:
                         import modal_handler
-                        video_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
+                        volume_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
                         # signal completion
                         progress_dialog.progress_queue.put(("done", 100))
                     else:
                         import local_handler
-                        video_segments = local_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
+                        volume_segments = local_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
                         # signal completion
                         progress_dialog.progress_queue.put(("done", 100))
                 
@@ -446,16 +457,16 @@ class SegmentationController:
                     if os.path.exists(local_folder):
                         shutil.rmtree(local_folder)
 
-                self.view.after(0, lambda: finish_segmentation(video_segments))
+                self.view.after(0, lambda: finish_segmentation(volume_segments))
             except Exception as e:
                 self.view.after(0, lambda: tk.messagebox.showerror("Segmentation Error", f"An exception occurred in the container:\n{e}"))
     
-        def finish_segmentation(video_segments: SegmentationResult) -> None:
+        def finish_segmentation(volume_segments: SegmentationResult) -> None:
             progress_dialog.close()
             if completion_callback:
-                completion_callback(video_segments)
+                completion_callback(volume_segments)
             else:
-                self.view.show_segmentation(video_segments, axis_str_suffix)
+                self.view.show_segmentation(volume_segments, axis_str_suffix)
                 self.view.update_mesh_view()
         
         seg_thread = threading.Thread(target=run_segmentation)
@@ -621,8 +632,8 @@ class SegmentationController:
 
             # Completion callback to capture segmentation result.
             result_container = {}
-            def completion_callback(video_segments):
-                result_container['video_segments'] = video_segments
+            def completion_callback(volume_segments):
+                result_container['volume_segments'] = volume_segments
             
             # Call segment_image on the downsampled volume.
             # Save the downsampled image temporarily as a NIfTI file.
@@ -645,20 +656,20 @@ class SegmentationController:
 
             def check_result() -> None:
                 nonlocal most_recent_video_segments
-                if 'video_segments' in result_container:
-                    video_segments = result_container['video_segments']
-                    most_recent_video_segments = result_container['video_segments']
+                if 'volume_segments' in result_container:
+                    volume_segments = result_container['volume_segments']
+                    most_recent_video_segments = result_container['volume_segments']
                     
                     os.remove(f"./temp/{temp_filename}_{axis_str_suffix}.nii")
                     
-                    # if slice_idx not in video_segments:
+                    # if slice_idx not in volume_segments:
                     #     messagebox.showerror("Error", f"No segmentation found for slice {slice_idx}.")
                     #     return
                     
                     nonlocal upsampled_masks
                     upsampled_masks = {}
 
-                    for obj_id, seg_mask_down in video_segments[slice_idx].items():
+                    for obj_id, seg_mask_down in volume_segments[slice_idx].items():
                         if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
                             seg_mask_down = seg_mask_down[0]
                         if seg_mask_down.dtype == np.bool_:
@@ -688,7 +699,7 @@ class SegmentationController:
                     # auto compute new seeds for each object
                     new_seeds = {}
                     for obj_id in seeds.keys():
-                        seg_mask_down = video_segments[slice_idx].get(obj_id)
+                        seg_mask_down = volume_segments[slice_idx].get(obj_id)
                         if seg_mask_down is not None:
                             if seg_mask_down.ndim == 3 and seg_mask_down.shape[0] == 1:
                                 seg_mask_down = seg_mask_down[0]
@@ -890,3 +901,9 @@ class SegmentationController:
         # Merge draft points from all tabs into regular points
         for idx in [0,1,2]:
             self.merge_drafts(idx)
+    
+    def export_3d_mesh(self):
+        self.exporter.export_3d_mesh()
+
+    def export_view_with_mask(self):
+        self.exporter.export_view_with_mask()
