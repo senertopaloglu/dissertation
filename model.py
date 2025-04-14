@@ -1,10 +1,13 @@
+"""
+Module for managing image data. Defines ImageModel class for loading and processing 3D images using ITK.
+"""
 import itk
 import numpy as np
 
 class ImageModel:
     """
     The Model in our MVC. Responsible for loading the ITK image and providing
-    slices for visualization.
+    slices for visualisation.
     """
     def __init__(self, filename: str):
         self.filename = filename
@@ -16,7 +19,7 @@ class ImageModel:
         """
         Load a 3D image from a file using ITK.
 
-        Initializes an ITK image reader for a 3D image.
+        Initialises an ITK image reader for a 3D image.
         It reads the image data from the provided filename and stores the output image for further processing.
 
         Returns:

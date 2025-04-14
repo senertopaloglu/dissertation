@@ -1,3 +1,6 @@
+"""
+Module for handling remote segmentation of 3d volumes.
+"""
 import os
 import sys
 import site
@@ -113,9 +116,9 @@ def run_segmentation(
     predictor.reset_state(inference_state)
 
 
-    volume_segments = {}  # volume_segments contains the per-frame segmentation results
+    volume_segments = {}  # contains the per-frame segmentation results
 
-    prompts = {}  # hold all the clicks we add for visualization
+    prompts = {}  # contains all the clicks we add for visualisation
 
     if not is_global:
         ann_frame_idx = frame_idx  # the frame index of the annotation
@@ -159,7 +162,7 @@ def run_segmentation(
             )
 
     if is_final:
-        # run propagation throughout the video and collect the results in a dict
+        # run propagation throughout the volume and collect the results in a dict
         # prop forwards
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=ann_frame_idx):
             volume_segments[out_frame_idx] = {
@@ -195,7 +198,7 @@ def segment(
     is_global: bool = False,
 ) -> SegmentationResult:
     """
-    Invoke remote segmentation on video frames using provided annotation points.
+    Invoke remote segmentation on volume slices using provided annotation points.
 
     This function is a wrapper that forwards the segmentation task to the 
     remote function 'run_segmentation' via Modal (modal.com). The actual segmentation logic 
@@ -206,10 +209,10 @@ def segment(
         slices: Unused parameter for segmentation slices.
         points: A dictionary where keys are object IDs and values are lists of point coordinates and labels.
         frame_idx: The index of the reference frame for segmentation.
-        foldername: The folder name containing video frames.
+        foldername: The folder name containing volume slices.
         multi_resolution: Boolean indicating if multi-resolution processing should be applied.
         is_first: Boolean flag indicating if this is the first segmentation invocation.
-        is_final: Boolean flag indicating if this is the final segmentation (which triggers full video propagation).
+        is_final: Boolean flag indicating if this is the final segmentation (which triggers full volume propagation).
 
     Returns:
         volume_segments: A dictionary mapping frame indices to segmentation mask results.

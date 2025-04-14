@@ -1,3 +1,6 @@
+"""
+Module for converting DICOM images to NIfTI format. Provides a command-line interface for conversion.
+"""
 from typing import Optional
 import SimpleITK as sitk
 import argparse
@@ -27,7 +30,7 @@ class DicomToNifti:
         if nifti_file_path is None:
             nifti_file_path = dicom_folder_path + ".nii"
 
-        sitk.WriteImage(image, nifti_file_path) # TODO: decide whether to compress this file to .nii.gz
+        sitk.WriteImage(image, nifti_file_path)
 
         return nifti_file_path
 

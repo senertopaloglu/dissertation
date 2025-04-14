@@ -1,3 +1,6 @@
+"""
+Module for converting NIfTI volumes to PNG slices.
+"""
 import argparse
 import nibabel as nib
 import numpy as np
@@ -29,7 +32,7 @@ def nifti_to_png(nifti_path: str, output_folder: str, axis: str) -> None:
     # Print the data shape for debugging
     print("Data shape:", data.shape)
 
-    # Normalize the data to 0-255
+    # Normalise the data to 0-255
     data = data - np.min(data)
     data = (data / np.max(data)) * 255
     data = data.astype(np.uint8)

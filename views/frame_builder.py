@@ -1,3 +1,9 @@
+"""
+Module for building and configuring GUI frames.
+
+This module provides helper functions and custom toolbar classes to create various
+frames used in the application, including 2D image views and a 3D mesh view.
+"""
 import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap import Frame, Scale, Checkbutton

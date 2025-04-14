@@ -1,3 +1,16 @@
+"""
+Module for running the Image Segmentation Application.
+
+This module serves as the main entry point for the application. It creates the Model,
+View, and Controller components, configures the mode of operation (local or remote),
+and starts the tkinter main loop.
+
+Example:
+    To run locally:
+        python app.py --mode local
+    To run remotely:
+        python app.py --mode remote
+"""
 import argparse
 import tkinter as tk
 
@@ -20,14 +33,11 @@ def main():
     parser.add_argument('--mode', choices=['local', 'remote'], default='local', help='Mode of operation: local or remote')
     args = parser.parse_args()
     
-    # Create the Model
     model = ImageModel(None)
 
-    # Initialize the view (GUI). 
     # We pass 'None' temporarily for the controller and will set it after instantiating the controller.
     view = MainView(model, None)
 
-    # Create the Controller
     controller = SegmentationController(model, view)
     controller.is_remote = (args.mode == 'remote')
 

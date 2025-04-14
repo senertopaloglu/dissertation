@@ -1,3 +1,6 @@
+"""
+Module for computing performance metrics (DICE, ASSD) from segmentation results.
+"""
 import numpy as np
 from scipy import ndimage
 from sklearn.neighbors import KDTree

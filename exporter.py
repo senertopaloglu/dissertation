@@ -1,4 +1,10 @@
-# exporter.py
+"""
+Module for exporting segmentation results.
+
+This module defines the Exporter class, which is responsible for exporting segmentation results.
+It supports exporting 3D meshes as STL files and exporting image views with segmentation masks
+overlayed as NIfTI files.
+"""
 import os
 import numpy as np
 import tkinter as tk
@@ -81,7 +87,7 @@ class Exporter:
             None
         """
         popup = tk.Toplevel(self.main_view)
-        popup.title("Choose Export Color Format")
+        popup.title("Choose Export Colour Format")
         popup.transient(self.main_view)
 
         instruction_label = tk.Label(popup, text="Select export format for the exported view:")

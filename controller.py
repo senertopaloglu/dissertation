@@ -1,3 +1,13 @@
+"""
+Module for controlling the image segmentation process and managing interactions.
+
+This module defines the SegmentationController class which coordinates the logic
+between the Model and the View. It handles operations such as image loading,
+point selection, segmentation (including multi-resolution segmentation), undo/redo,
+and exporting segmentation results. The controller integrates with helper modules
+for tasks like converting DICOM to NIfTI, capturing stdout for progress updates,
+and exporting 3D meshes or views with overlayed segmentation masks.
+"""
 from collections import defaultdict
 import sys
 import shutil
@@ -21,7 +31,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import * # colors and styles
+from ttkbootstrap.constants import * # import colours
 
 import cv2
 import numpy as np
@@ -107,7 +117,7 @@ class SegmentationController:
 
         Args:
             event (MouseEvent): The mouse event containing click coordinates and context.
-            pointer_color (str): The color for the pointer click.
+            pointer_color (str): The colour for the pointer click.
             ax (Axes): The matplotlib Axes instance where the click occurred.
 
         Returns:
@@ -606,15 +616,15 @@ class SegmentationController:
                     return s
             return original
 
-        most_recent_video_segments = None
+        most_recent_volume_segments = None
 
         # This inner function performs one iteration.
         def iteration(resolution: int, seeds: Points) -> None:
             if resolution > max(original_h, original_w):
                 def show_final():
-                    nonlocal most_recent_video_segments
-                    if most_recent_video_segments:
-                        self.view.show_segmentation(most_recent_video_segments, axis_str_suffix)
+                    nonlocal most_recent_volume_segments
+                    if most_recent_volume_segments:
+                        self.view.show_segmentation(most_recent_volume_segments, axis_str_suffix)
                         self.view.update_mesh_view()
                 self.view.after(100, show_final)
                 return
@@ -655,10 +665,10 @@ class SegmentationController:
             )
 
             def check_result() -> None:
-                nonlocal most_recent_video_segments
+                nonlocal most_recent_volume_segments
                 if 'volume_segments' in result_container:
                     volume_segments = result_container['volume_segments']
-                    most_recent_video_segments = result_container['volume_segments']
+                    most_recent_volume_segments = result_container['volume_segments']
                     
                     os.remove(f"./temp/{temp_filename}_{axis_str_suffix}.nii")
                     
@@ -776,7 +786,7 @@ class SegmentationController:
     def merge_drafts(self, active_index: int = None) -> None:
         """
         Merges draft points into regular points for the current active tab.
-        If a draft point has the same color as an existing final point,
+        If a draft point has the same colour as an existing final point,
         it overwrites that final point. Afterwards, resets draft points,
         listbox, undo/redo stacks and draft line objects.
         
@@ -804,7 +814,7 @@ class SegmentationController:
         merged_points = []
         colors = set(final_points_dict.keys()).union(set(draft_points_dict.keys()))
         for color in colors:
-            # If any draft points were recorded for this color, use them to overwrite
+            # If any draft points were recorded for this colour, use them to overwrite
             if draft_points_dict[color]:
                 merged_points.extend(draft_points_dict[color])
             else:
@@ -822,7 +832,7 @@ class SegmentationController:
                 try:
                     current_tab.final_points_listbox.itemconfig(idx, {'fg': color.lower()})
                 except Exception as e:
-                    print(f"Error setting color in listbox: {e}")
+                    print(f"Error setting colour in listbox: {e}")
         
         # Reset all draft state: points, listbox, undo/redo stacks and drawn lines.
         current_tab.draft_points = []

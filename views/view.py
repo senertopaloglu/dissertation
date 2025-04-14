@@ -1,3 +1,10 @@
+"""
+Module for building the main view of the application.
+
+This module defines the MainView class responsible for assembling and displaying
+the primary GUI components of the application, which include the sidebar,
+2D image frames (axial, coronal, sagittal), and the 3D mesh view.
+"""
 import os
 from collections import defaultdict
 from typing import Any, Callable, Optional, Union
@@ -35,7 +42,28 @@ except ImportError:
 
 class MainView(Window):
     """
-    The View in our MVC. Responsible for building and displaying the GUI.
+    The View in our MVC. Constructs and manages the primary user interface components including
+    the sidebar, 2D image frames (axial, coronal, sagittal), and the 3D mesh view.
+    It also handles controller callbacks for image import/export, segmentation, and other user interactions.
+
+    Attributes:
+        model (object): The data model for the application.
+        controller (object): The controller that processes user actions.
+        pointer_color_mapping (dict): Mapping from pointer IDs (1-10) to color names.
+        color_obj_id_mapping (dict): Reverse mapping from color names to pointer IDs.
+        _on_click_callback (Callable): The callback function invoked on mouse click events.
+        _undo_callback (Callable): The callback function invoked when the user performs an undo.
+        _redo_callback (Callable): The callback function invoked when the user performs a redo.
+        _slice_request_callback (Callable): The callback function to request a slice from the model.
+        last_used_axis (Any): The title of the last used axes.
+        last_used_slice_index (int): The index of the last used slice.
+        last_result (Any): The most recent (final) segmentation result.
+        last_draft_result (Any): The most recent draft segmentation result.
+        sidebar (Sidebar): The sidebar widget containing controls for various actions.
+        axial_view (Frame): The frame for displaying the axial image view.
+        coronal_view (Frame): The frame for displaying the coronal image view.
+        sagittal_view (Frame): The frame for displaying the sagittal image view.
+        mesh_view (Frame): The frame for displaying the 3D mesh view.
     """
     def __init__(self, model, controller):
         super().__init__()
@@ -87,7 +115,7 @@ class MainView(Window):
 
         plt.ion()  # Enable interactive mode for matplotlib
         
-        # Behavior for closing
+        # behaviour on window close
         self.protocol("WM_DELETE_WINDOW", self._on_close)        
 
     def _build_image_frames(self) -> None:

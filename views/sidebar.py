@@ -1,3 +1,9 @@
+"""
+Module for building and managing the sidebar widget in the application.
+
+This module provides the Sidebar class which encapsulates the widgets and controls
+related to image import/export, segmentation actions, and point management.
+"""
 import os
 import tkinter as tk
 import ttkbootstrap as ttk
@@ -12,6 +18,22 @@ class Sidebar(Frame):
 
     This class builds and configures the sidebar UI components including buttons,
     checkboxes, tab controls and menus. It also forwards user actions to the controller.
+    
+    Attributes:
+        model (object): The data model of the application.
+        view (object): The view component of the application.
+        controller (object): The controller handling user actions.
+        undo_icon (tk.PhotoImage): Icon image for the undo action.
+        redo_icon (tk.PhotoImage): Icon image for the redo action.
+        segment_icon (tk.PhotoImage): Icon image for segmentation action.
+        import_icon (tk.PhotoImage): Icon image for the import action.
+        export_icon (tk.PhotoImage): Icon image for the export action.
+        merge_icon (tk.PhotoImage): Icon image for the merge action.
+        merge_all_icon (tk.PhotoImage): Icon image for the merge all action.
+        global_draft_mode (ttk.BooleanVar): Boolean variable indicating whether draft mode is active.
+        global_segmentation_var (ttk.BooleanVar): Boolean variable indicating whether global segmentation is enabled.
+        tabControl (Notebook): Notebook widget that holds the different view tabs.
+        tabs (list): List of tab frames contained within the Notebook.
     """
     def __init__(self, parent: tk.Widget, model, view, controller):
         super().__init__(parent, padding=10)

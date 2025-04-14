@@ -1,3 +1,9 @@
+"""
+Module for capturing and processing stdout for progress updates.
+
+This module defines the StdoutCapture class which wraps an existing stdout stream to intercept
+and process output lines.
+"""
 from queue import Queue
 import re
 from typing import TextIO, Tuple

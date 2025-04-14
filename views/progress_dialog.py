@@ -1,3 +1,10 @@
+"""
+Module for displaying a modal progress dialog.
+
+This module defines the ProgressDialog class which is used to track the progress of
+segmentation processes, including model preparation, frame loading, and segmentation
+propagation.
+"""
 import time
 import queue
 import tkinter as tk
@@ -12,6 +19,19 @@ class ProgressDialog:
     This dialog displays progress bars and labels for various stages including model
     preparation, frame loading, and segmentation propagation. It also polls a queue for
     progress updates to reflect changes in real time.
+    
+    Attributes:
+        top (ttk.Toplevel): The top-level window for the progress dialog.
+        prep_label (ttk.Label): Label displaying the percentage of model preparation completed.
+        prep_progress (ttk.Progressbar): Progress bar for model preparation.
+        load_label (ttk.Label): Label displaying the percentage of frame loading completed.
+        load_progress (ttk.Progressbar): Progress bar for frame loading.
+        prop_label (ttk.Label): Label displaying the percentage of segmentation propagation.
+        prop_progress (ttk.Progressbar): Progress bar for segmentation propagation.
+        progress_queue (queue.Queue): A queue used to receive progress updates.
+        prep_start_time (float): The timestamp when model preparation started.
+        current_progress (dict): Dictionary tracking current progress for different stages.
+        max_prop (int): The maximum percentage reached during segmentation propagation.
     """
     def __init__(self, master: tk.Tk, title: str = "Progress"):
         self.top = ttk.Toplevel(master)

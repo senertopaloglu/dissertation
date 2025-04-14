@@ -1,3 +1,6 @@
+"""
+Module for converting NIfTI volumes to JPG slices.
+"""
 import argparse
 import nibabel as nib
 import numpy as np
@@ -8,7 +11,7 @@ def nifti_to_jpg(nifti_path: str, output_folder: str, axis: str, downsampled: bo
     """
     Convert a NIfTI file into a series of JPG images by slicing along a specified axis.
 
-    This function loads a NIfTI image using nibabel, converts it to its canonical form, normalizes
+    This function loads a NIfTI image using nibabel, converts it to its canonical form, normalises
     the data to a 0-255 grayscale range, and then extracts slices along the given axis. Depending on the
     parameters provided, the slicing axis may be adjusted (or the slice order reversed). Each extracted
     slice is saved as a JPG image into the output folder.
@@ -27,7 +30,7 @@ def nifti_to_jpg(nifti_path: str, output_folder: str, axis: str, downsampled: bo
     img_canonical = nib.as_closest_canonical(img)
     data = img_canonical.get_fdata()
 
-    # Normalize the data to 0-255
+    # Normalise the data to 0-255
     data = data - np.min(data)
     data = (data / np.max(data)) * 255
     data = data.astype(np.uint8)

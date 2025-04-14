@@ -1,3 +1,6 @@
+"""
+Module for running metric based segmentation testing (uses metrics.py)
+"""
 import os
 import re
 import argparse
@@ -9,13 +12,13 @@ from metrics import dice_coefficient, new_assd, DICE
 
 def load_mask(filepath: str) -> np.ndarray:
     """
-    Load a PNG image and binarize it (foreground -> non-zero pixel).
+    Load a PNG image and binarise it (foreground -> non-zero pixel).
 
     Args:
         filepath (str): The path to the PNG image.
 
     Returns:
-        np.ndarray: A binarized image mask as a numpy array.
+        np.ndarray: A binarised image mask as a numpy array.
     """
     img = Image.open(filepath)
     data = np.array(img)
@@ -23,7 +26,7 @@ def load_mask(filepath: str) -> np.ndarray:
     if data.ndim == 3:
         # Using the first channel
         data = data[:, :, 0]
-    # Binarize: consider any nonzero pixel as foreground.
+    # Binarise: consider any nonzero pixel as foreground.
     return (data > 0).astype(np.uint8)
 
 def png_series_reader(dir: str, reverse: bool = False) -> np.ndarray:
