@@ -454,12 +454,18 @@ class SegmentationController:
                 with contextlib.redirect_stdout(capture):
                     if self.is_remote:
                         import modal_handler
-                        volume_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
+                        try:
+                            volume_segments = modal_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
+                        except Exception as e:
+                            tk.messagebox.showerror("Segmentation Error", f"An exception occurred:\n{e}")
                         # signal completion
                         progress_dialog.progress_queue.put(("done", 100))
                     else:
                         import local_handler
-                        volume_segments = local_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
+                        try:
+                            volume_segments = local_handler.segment(slices, points, frame_idx, foldername, multi_resolution, is_first, is_final, is_global)
+                        except Exception as e:
+                            tk.messagebox.showerror("Segmentation Error", f"An exception occurred:\n{e}")
                         # signal completion
                         progress_dialog.progress_queue.put(("done", 100))
                 
