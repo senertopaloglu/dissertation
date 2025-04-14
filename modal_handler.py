@@ -32,7 +32,8 @@ image = (
         "pip install --upgrade setuptools",
         "pip install matplotlib",
         "CC=gcc CXX=g++",
-        "pip install torch torchvision torchaudio --no-build-isolation --index-url https://download.pytorch.org/whl/cu121"
+        "pip install torch torchvision torchaudio --no-build-isolation --index-url https://download.pytorch.org/whl/cu121",
+        "pip install tqdm"
     )
 )
 vol = modal.Volume.from_name("my_adapted_sam_2_medical_3d")
@@ -75,9 +76,10 @@ def run_segmentation(
             subprocess.call([venv_python, '-m', 'pip', 'install', 'hydra-core'])
 
         try:
-            subprocess.call([venv_python, '-m', 'pip', 'show', ".[demo]"])
-        except subprocess.CalledProcessError as e:
-            subprocess.call([venv_python, '-m', 'pip', 'install', '--prefer-binary', '--no-build-isolation', "-e", ".[demo]"])
+            subprocess.check_output([venv_python, '-m', 'pip', 'show', "SAM-2-For-Medical-3D"])
+        except:
+            print("did not find -e .[demo] i will install now")
+            subprocess.call([venv_python, '-m', 'pip', 'install', '-e', ".[demo]"])
 
     torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
     if torch.cuda.get_device_properties(0).major >= 8:

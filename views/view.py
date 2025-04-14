@@ -30,6 +30,8 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import trimesh
 import scipy.ndimage as ndimage
 
+import shutil
+
 import numpy as np
 
 from skimage import measure
@@ -249,7 +251,16 @@ class MainView(Window):
         )
 
         if file_path and os.path.isfile(file_path) and file_path.endswith(".nii"):
-            self.controller.load_image(file_path)
+            dest_path = os.path.join(os.getcwd(), os.path.basename(file_path))
+            if os.path.abspath(file_path) != os.path.abspath(dest_path):
+                try:
+                    shutil.copy(file_path, dest_path)
+                    print("saved to {dest_path}")
+                    self.controller.load_image(dest_path)
+                except Exception as e:
+                    tk.messagebox.showerror("Import Error", "Error importing NIfTI file.")
+            else:
+                self.controller.load_image(file_path)
         else:
             tk.messagebox.showerror("Import Error", "Please select a valid NIfTI file.")
     
