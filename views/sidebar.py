@@ -323,10 +323,18 @@ class Sidebar(Frame):
                 compound="left"
             )
             tab.draft_btn_redo.grid(row=0, column=1, sticky="ew")
+
+            def handle_merge_drafts():
+                if self.controller:
+                    if self.global_segmentation_var.get():
+                        self.controller.merge_all_drafts()
+                    else:
+                        self.controller.merge_drafts()
+
             tab.merge_drafts_btn = Button(
                 draft_btn_frame,
                 text="Accept & Merge View Drafts",
-                command=lambda: self.controller.merge_drafts() if self.controller else None,
+                command=handle_merge_drafts,
                 style="DarkerTurquoise.TButton",
                 image=self.merge_icon,
                 compound="left"
@@ -348,11 +356,11 @@ class Sidebar(Frame):
                                      style="DarkGreen.TButton")
             tab.btn_segment.pack(fill="x", pady=2)
 
-            tab.btn_auto_seg = ttk.Button(content_frame,
-                                          text="Apply Multiresolution\nSegmentation",
-                                          command=lambda t=tab: self.controller.multiresolution_segmentation(t) if self.model.image else None,
-                                          image=self.segment_icon, compound="left", bootstyle="success")
-            tab.btn_auto_seg.pack(fill="x", pady=(2,10))
+            # tab.btn_auto_seg = ttk.Button(content_frame,
+            #                               text="Apply Multiresolution\nSegmentation",
+            #                               command=lambda t=tab: self.controller.multiresolution_segmentation(t) if self.model.image else None,
+            #                               image=self.segment_icon, compound="left", bootstyle="success")
+            # tab.btn_auto_seg.pack(fill="x", pady=(2,10))
 
             tab.btn_export_view = ttk.Button(content_frame, text="Export View with\nSegmentation Masks",
                                              command=lambda: self._export_view_with_mask(),

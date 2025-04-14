@@ -485,12 +485,16 @@ class SegmentationController:
     # multiresolution segmentation routine
     def multiresolution_segmentation(self, tab: int) -> None:
         """
-        Performs multi-resolution segmentation on the image for a specific view.
+        [DEPRECATED] Performs multi-resolution segmentation on the image for a specific view.
 
         This method retrieves the original image and its corresponding slice based on the active tab.
         It then downsamples the image volume iteratively and performs segmentation at each resolution.
         Segmentation masks from the lower resolution are used to compute new seeds for further iterations.
         Debug figures may be displayed for verification of the downsampled masks and recomputed seed points.
+
+        Deprecated:
+            This method is deprecated as multiresolution segmentation provided negligible gains, and will be removed in a future release.
+            Use segment_image(...) instead.
 
         Args:
             tab (int): The index of the tab on which segmentation is performed (0 for axial, 1 for coronal,
