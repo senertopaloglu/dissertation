@@ -604,7 +604,6 @@ class MainView(Window):
         Returns:
             matplotlib.lines.Line2D: The line object representing the plotted point.
         """
-        # We can glean the current figure from plt.gcf(), but typically you'd keep references.
         if ax is None:
             ax = plt.gca()
         return ax.plot(x, y, marker='o', color=color.lower())[0]

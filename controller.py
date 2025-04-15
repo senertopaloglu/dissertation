@@ -160,7 +160,10 @@ class SegmentationController:
         current_tab.line_objects.append(line)
 
         # update the state of the positive_click_checkbox based on points for the current color.
-        points_current_color = [pt for pt in current_tab.points if pt[2].lower() == color]
+        if self.view.sidebar.global_draft_mode.get():
+            points_current_color = [pt for pt in current_tab.draft_points if pt[2].lower() == color]
+        else:
+            points_current_color = [pt for pt in current_tab.points if pt[2].lower() == color]
         if points_current_color:
             current_tab.positive_click_checkbox.config(state="normal")
         else:
