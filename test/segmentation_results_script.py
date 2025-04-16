@@ -72,6 +72,8 @@ def main():
     #####################################
     #### SLICES: DICE COEFFICIENT #######
     ####### author: Sener Topaloglu #####
+    ## CHAOS evaluation does not have ##
+    ## slice by slice DICE metric.  ####
     #####################################
 
     # List PNG files in each folder; assuming filenames match between folders.
@@ -124,6 +126,8 @@ def main():
 
     ######################################
     ################ SETUP ###############
+    ####### rest of this file is setup ###
+    ### according to CHAOS repo ##########
     ######################################
 
     if args.modality == 'CT':
