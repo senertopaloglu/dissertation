@@ -261,6 +261,9 @@ class MainView(Window):
                     tk.messagebox.showerror("Import Error", "Error importing NIfTI file.")
             else:
                 self.controller.load_image(file_path)
+            for tab in self.sidebar.tabs:
+                tab.positive_click_var.set(True)
+                tab.positive_click_checkbox.config(state="normal")
         else:
             tk.messagebox.showerror("Import Error", "Please select a valid NIfTI file.")
     
@@ -278,6 +281,9 @@ class MainView(Window):
         dicom_files = [f for f in os.listdir(folder_path) if f.lower().endswith(".dcm")]
         if dicom_files:
             self.controller.load_image(folder_path, False)
+            for tab in self.sidebar.tabs:
+                tab.positive_click_var.set(True)
+                tab.positive_click_checkbox.config(state="normal")
         else:
             tk.messagebox.showerror(
                 "Import Error",
