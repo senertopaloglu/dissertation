@@ -70,7 +70,8 @@ def main():
         max_gt_index = max(int(re.search(r'liver_GT_(\d+)\.png$', f).group(1)) for f in gt_files)
 
     #####################################
-    ######### DICE COEFFICIENT ##########
+    #### SLICES: DICE COEFFICIENT #######
+    ####### author: Sener Topaloglu #####
     #####################################
 
     # List PNG files in each folder; assuming filenames match between folders.
@@ -79,7 +80,6 @@ def main():
         print("No PNG files found in the input folder.")
         return
     
-    total_dice = 0.0
     count = 0
     for filename in input_files:
         input_path = os.path.join(args.input_dir, filename)
@@ -117,12 +117,9 @@ def main():
         dice = dice_coefficient(gt_mask, seg_mask)
 
         print(f"{filename} vs {actual_gt_name}: DICE Coefficient = {dice}")
-        total_dice += dice
         count += 1
 
-    if count > 0:
-        print(f"Average DICE Coefficient over {count} slices: {total_dice/count}")
-    else:
+    if count == 0:
         print("No matching files to compare.")
 
     ######################################
@@ -137,6 +134,7 @@ def main():
     Vseg = png_series_reader(args.input_dir)
 
     ######################################
+    ### DICE(...) is from CHAOS ##########
     ########### DICE COEFFICIENT #########
     ######################################
 
@@ -144,6 +142,7 @@ def main():
     print(f"DICE: {dice_score}")
 
     ######################################
+    ### new_assd(...) is from CHAOS ######
     ############## ASSD ##################
     ######################################
 
