@@ -3,15 +3,34 @@
 ## Installation
 *NOTE: if you come across any problems that are undocumented here, then please visit https://github.com/Chuyun-Shen/SAM_2_Medical_3D/blob/main/INSTALL.md*
 
-### To run the software both remotely and locally
+### Installation to Run Segmentation Model Remotely and Locally
 
-
+1. unzip `20364425_software.zip` and rename unzipped folder to `dissertation`, or alternatively, unzip `20364425_software.zip` and extract all files to a folder called `dissertation`.
+*NOTE:* `dissertation` must be the top-level directory, such that `app.py` (and all files/folders on the same level as `app.py`) are directly inside the dissertation folder, if there are folders between `dissertation` and `app.py`, move their contents up the directory levels and delete the folders.
+2. [It is recommended to complete the subsequent steps via anaconda prompt] Move to `dissertation` folder
+3. Create conda environment with python version >=3.12: `conda create -n <env_name> python=3.12`
+4. Activate the conda environment: `conda activate <env_name>`
+5. Install `torch` from URL: `pip install torch torchvision torchaudio --no-build-isolation --index-url https://download.pytorch.org/whl/cu121`
+6. Install software requirements: `pip install -r requirements.txt`
+7. *NOTE:* if any packages cant be found, try `pip install <name_of_package>` followed by `pip install -r requirements.txt` (this was not necessary at time of testing, but may be necessary if newly installated packages happen to bump the versions of their dependencies). If installation of `hydra-core` fails check that MSVC Build Tools are installed.
+8. Navigate to SAM_2_Medical_3D folder: `cd SAM_2_Medical_3D`
+9. Install segmentation model (SAM_2_Medical_3D) dependencies: `pip install --prefer-binary --no-build-isolation -e .[demo]` or if that doesn't work try `pip install --prefer-binary --no-build-isolation -e ".[demo]"`
+10. Navigate back to dissertation folder: `cd ..`
+11. The segmentation model is very large so it cannot be compressed with the rest of the software and satisfy the upload file size limit on Moodle (250MB). The checkpoint is also too large for git therefore it is necessary to fetch the segmentation model checkpoint (850MB). Please use one of the three options below to fetch the checkpoint (`sam2_hiera_large.pt`):
+    -  [RECOMMENDED] Download from https://uniofnottm-my.sharepoint.com/:u:/g/personal/psyst6_nottingham_ac_uk/EbRTpkiSK0tOibGLN4fe15AB3qLeBPclU_sJiEN6gShfzw?e=oOFcsB and move into `dissertation/SAM_2_Medical_3D` folder
+    - Download from https://drive.google.com/file/d/1BRZJJveK0HF6bd96O4ZKXdXe9pZWqnzX/view?usp=sharing and move into dissertation/SAM_2_Medical_3D folder
+    - Run the script at `dissertation/SAM_2_Medical_3D/checkpoints/download_ckpts.sh` to download the checkpoint and move the downloaded `sam2_hiera_large.pt` file into `dissertation/SAM_2_Medical_3D`. This is a bash script so you will need WSL or perhaps git bash (with some extensions)
+12. Create a modal account via modal.com/signup (sign up can be completed via a Google or GitHub account)
+13. Generate a modal API authentication token by running `python -m modal setup` and follow on-screen instructions
+14. Create a modal file storage volume `modal volume create my_adapted_sam_2_medical_3d`
+15. Upload the local SAM_2_Medical_3D folder to the newly created volume: `modal volume put my_adapted_sam_2_medical_3d SAM_2_Medical_3D`
+16. To run the program (always run the program from the top level directory): LOCALLY: `python app.py` or `python app.py --mode local`. REMOTELY: `python app.py --mode remote`. *NOTE:* any errors you may encounter at this stage can be troubleshooted by visiting https://github.com/Chuyun-Shen/SAM_2_Medical_3D/blob/main/INSTALL.md
 
 When the container is run for the first time it will be slower as configuration is required.
 
 *NOTE:* After clicking segmentation, please ignore any file not found errors related to usage: `modal volume rm` . This is a safeguard to delete and rewrite any files with the same name.
 
-### To run the software only remotely
+### Installation to Run Segmentation Model Only Remotely
 1. unzip `20364425_software.zip` and rename unzipped folder to `dissertation`, or alternatively, unzip `20364425_software.zip` and extract all files to a folder called `dissertation`.
 *NOTE:* `dissertation` must be the top-level directory, such that `app.py` (and all files/folders on the same level as `app.py`) are directly inside the dissertation folder, if there are folders between `dissertation` and `app.py`, move their contents up the directory levels and delete the folders.
 2. The segmentation model is very large so it cannot be compressed with the rest of the software and satisfy the upload file size limit on Moodle (250MB). The checkpoint is also too large for git therefore it is necessary to fetch the segmentation model checkpoint (850MB). Please use one of the three options below to fetch the checkpoint (`sam2_hiera_large.pt`):
@@ -34,12 +53,29 @@ When the container is run for the first time it will be slower as configuration 
 
 *NOTE:* After clicking segmentation, please ignore any file not found errors related to usage: `modal volume rm` . This is a safeguard to delete and rewrite any files with the same name.
 
-### To run the program only locally
+### Installation to Run Segmentation Model Only Locally
+Running the program locally will rely on CUDA toolkit installed on the PC. Local testing was completed successfully with CUDA toolkit 14.4. 
 
-to run the program (always run the program from the top level directory):
-- locally: `python app.py` or `python app.py --mode local`
-- remotely: `python app.py --mode remote`
+Although unexpected; there is the possibility of encountering warnings/errors about os environment variables - please follow instructions on screen to set these.
 
+Installating this software may require MSVC build tools if you do not have them (any .h file not found errors are an indicator that MSVC build tools must be installed. MSVC 2019 will suffice).
+
+1. unzip `20364425_software.zip` and rename unzipped folder to `dissertation`, or alternatively, unzip `20364425_software.zip` and extract all files to a folder called `dissertation`.
+*NOTE:* `dissertation` must be the top-level directory, such that `app.py` (and all files/folders on the same level as `app.py`) are directly inside the dissertation folder, if there are folders between `dissertation` and `app.py`, move their contents up the directory levels and delete the folders.
+2. [It is recommended to complete the subsequent steps via anaconda prompt] Move to `dissertation` folder
+3. Create conda environment with python version >=3.12: `conda create -n <env_name> python=3.12`
+4. Activate the conda environment: `conda activate <env_name>`
+5. Install `torch` from URL: `pip install torch torchvision torchaudio --no-build-isolation --index-url https://download.pytorch.org/whl/cu121`
+6. Install software requirements: `pip install -r requirements.txt`
+7. *NOTE:* if any packages cant be found, try `pip install <name_of_package>` followed by `pip install -r requirements.txt` (this was not necessary at time of testing, but may be necessary if newly installated packages happen to bump the versions of their dependencies). If installation of `hydra-core` fails check that MSVC Build Tools are installed.
+8. Navigate to SAM_2_Medical_3D folder: `cd SAM_2_Medical_3D`
+9. Install segmentation model (SAM_2_Medical_3D) dependencies: `pip install --prefer-binary --no-build-isolation -e .[demo]` or if that doesn't work try `pip install --prefer-binary --no-build-isolation -e ".[demo]"`
+10. Navigate back to dissertation folder: `cd ..`
+11. The segmentation model is very large so it cannot be compressed with the rest of the software and satisfy the upload file size limit on Moodle (250MB). The checkpoint is also too large for git therefore it is necessary to fetch the segmentation model checkpoint (850MB). Please use one of the three options below to fetch the checkpoint (`sam2_hiera_large.pt`):
+    -  [RECOMMENDED] Download from https://uniofnottm-my.sharepoint.com/:u:/g/personal/psyst6_nottingham_ac_uk/EbRTpkiSK0tOibGLN4fe15AB3qLeBPclU_sJiEN6gShfzw?e=oOFcsB and move into `dissertation/SAM_2_Medical_3D` folder
+    - Download from https://drive.google.com/file/d/1BRZJJveK0HF6bd96O4ZKXdXe9pZWqnzX/view?usp=sharing and move into dissertation/SAM_2_Medical_3D folder
+    - Run the script at `dissertation/SAM_2_Medical_3D/checkpoints/download_ckpts.sh` to download the checkpoint and move the downloaded `sam2_hiera_large.pt` file into `dissertation/SAM_2_Medical_3D`. This is a bash script so you will need WSL or perhaps git bash (with some extensions)
+12. To run the program (always run the program from the top level directory):`python app.py` or `python app.py --mode local` *NOTE:* any errors you may encounter at this stage can be troubleshooted by visiting https://github.com/Chuyun-Shen/SAM_2_Medical_3D/blob/main/INSTALL.md
 
 
 
@@ -58,7 +94,7 @@ To do statistical tests on segmentation results (DICE, ASSD):
 2. Open command prompt and navigate to `dissertation` (top-level directory) 
 3. Convert the exported .nii file into a folder containing png slices from the axial perspective by running `python nifti_to_png.py <path_to_exported_nii_file>.nii <path_to_output_png_folder> --axis axial`
 4. Navigate to the test directory `cd test`
-5. Run `python segmentation_results_script.py --input_dir <path_to_output_png_folder> --ground_truth_dir <path_to_ground_truth_folder> --modality <{CT,MR}> --dicom_dir <path_to_dicom_folder_of_ground_truth>`
+5. Run `python segmentation_results_script.py --input_dir <path_to_output_png_folder> --ground_truth_dir <path_to_ground_truth_folder> --modality <{CT,MR}> --dicom_dir <path_to_dicom_folder_of_ground_truth>` *NOTE:* make sure paths are absolute or relative to `test` directory
 
 ## Usage Information
 When exporting multiobject segmentation masks, the order of "overlaying" masks is as follows:
