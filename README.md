@@ -1,7 +1,27 @@
 # Interactive 3D Medical Image Segmentation Software
+This interactive 3D medical image segmentation software is designed to integrate seamlessly into the medical imaging workflow and can play a pivotal role in enhancing diagnosis, monitoring, and also treatment plans of patients. Its primary purpose is to facilitate detailed and accurate segmentation of medical images (including MR and CT images) using artificial intelligence techniques that do not require extensive expert training and guidance.
+
+The software has been thoughtfully designed for use by clinicians, such as oncologists and radiologists, in addition to imaging technicians and reduces the overhead of medical image segmentation - giving you more time for crucial aspects such as treatment planning.
+
+Major functionalities include:
+- Compatibility with standard medical imaging formats; DICOM and NIfTI images and exporting to STL.
+- Perform segmentation across axial, coronal, and sagittal views to capture comprehensive anatomical information.
+- Utilise segmentation at various resolutions to adapt to different clinical requirements and levels of detail.
+- Support segmentation of multiple objects simultaneously and enable cross-view integration for thorough spatial context.
+- Leverage immersive 3D visualisation to enhance understanding of complex anatomical structures.
+- Easily export segmentation results for further analysis, reporting, or integration into downstream clinical systems.
+
+Furthermore, the software offers flexibility in processing, which can be conducted locally, or remotely, if limited hardware is available.
+
 
 ## Installation
 *NOTE: if you come across any problems that are undocumented here, then please visit https://github.com/Chuyun-Shen/SAM_2_Medical_3D/blob/main/INSTALL.md*
+
+*another option if you do come across any undocumented issues: is removing the user manual pdf, although I have not ever needed this step*
+
+Local installation was tested and successfully performed on a Windows 11 machine with NVIDIA RTX 6000 Ada Generation GPU (48GB GPU Memory) (Cuda toolkit 14.4)
+
+Remote installation was tested and successfully performed on: 1) 64 bit Windows 10 machine (16GB RAM memory), 2) Windows 11 machine in room A32 at the School of Computer Science, University of Nottingham.
 
 ### Installation to Run Segmentation Model Remotely and Locally
 
@@ -97,6 +117,32 @@ To do statistical tests on segmentation results (DICE, ASSD):
 5. Run `python segmentation_results_script.py --input_dir <path_to_output_png_folder> --ground_truth_dir <path_to_ground_truth_folder> --modality <{CT,MR}> --dicom_dir <path_to_dicom_folder_of_ground_truth>` *NOTE:* make sure paths are absolute or relative to `test` directory
 
 ## Usage Information
+Please see the pdf user manual for more information on usage details (including images).
+
+Start by importing a valid DICOM/NIfTI image (via buttons in the top left corner of the screen). Under the import buttons are tabs (axial, coronal, sagittal) to control how the corresponding plot (on the right of the screen) is manipulated.
+
+Importantly, a “Draft Mode” feature exists to experiment with segmentation results before commiting the results to a more-refined, final version. Draft mode is particularly useful when you want to use multiple slices in the same view as the start point for independent segmentations (for example, when performing multiorgan segmentation with occlusions that prevent segmenting all organs in the same slice). Draft mode can be entered by checking the checkbox with the same name in the sidebar. Whether in or out of draft mode, all of the features below are supported:
+
+In each tab;
+- There is an option to choose a pointer colour (each pointer colour corresponds to a different object/region of interest that is to be segmented). 
+- As well as the option to make positive and negative clicks -  positive clicks encourage the the segmentation model to expand the mask and negative clicks constrain masks (for this reason, negative clicks are useful correction tools). 
+- To make a selection, simply click on the desired area of the corresponding plot on the right side of the screen.  The type of click (positive/negative) and coordinates of the selected point will show in the listbox below the pointer colour option. 
+- You may make any number of positive and negative clicks - if you make any mistakes, simply click “Undo”. 
+- After making the desired selections, you may segment the image (by clicking the button at the bottom of the tab). 
+
+After completing segmentation, you will see that segmentation masks have been overlayed on the respective view and the 3D mesh view (discussed below) has been generated. You can track the segmentation mask throughout the view by moving the slider at the top of the respective view in the grid on the right of the screen. You may also use the zoom and pan tools (located under the slider) to closely inspect the segmentation results. Also located under the slider are the options to hide/show both segmentation masks and points for cleaner evaluation of the quality of the segmentatoin mask.
+
+If you were previously in draft mode, you can now accept and merge your results from the draft segmentation and keep them.  NOTE: if you have performed segmentation using the same colour (ie on the same object), accepting and merging results from draft segmentation will overwrite your existing segmentations with the draft segmentations.  
+
+The 3D mesh view can be rotated for better visualisation. It tracks and display the 3D mesh model of all segmentation masks across all frames (for this reason, the 3D mesh view in draft mode is distinct from the 3D mesh view used when the user is out of draft mode). 
+
+You may repeat segmentation on the current view; or switch views by changing tabs and then changing the pointer colour etc. 
+
+Global view segmentation (accessible via a checkbox with the same name above the “Segment Image” button) allows users to select points in coronal and sagittal views and see the resulting segmentation mask in axial view. It is important that the axial slice index corresponds to at least one y-coordinate of a selection in coronal or sagittal view. Once finished with global view segmentation, please remember to uncheck the box to prevent unwanted masks appearing in axial view.
+
+At any point, segmentation results corresponding to the view can be exported as binary, grayscale or RGB NIfTI files, by clicking the last button at the bottom of the tab.
+Exporting the generated 3D mesh as an STL file is also supported at any point, by clicking Export 3D Mesh View button in the top left corner of the application.
+
 When exporting multiobject segmentation masks, the order of "overlaying" masks is as follows:
 1. red
 2. blue
